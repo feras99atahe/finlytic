@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "250653096987",
+    "project_id": "wallet-tracker-40296",
+    "storage_bucket": "wallet-tracker-40296.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:250653096987:android:b7f678418de0f46872ccbe",
+        "android_client_info": {
+          "package_name": "com.example.wallet_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJ9BkW94sP4OD6iv3Z_FxQRTMcAq6gShk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
