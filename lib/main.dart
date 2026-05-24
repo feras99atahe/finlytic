@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -19,8 +20,7 @@ void main() async {
         options: DefaultFirebaseOptions.currentPlatform);
     firebaseAvailable = true;
   } catch (_) {
-    // Firebase not configured for this platform (e.g. macOS desktop).
-    // App runs in local-only mode.
+    // Firebase not configured for this platform — local-only mode.
   }
   runApp(const FinlyticApp());
 }
@@ -45,15 +45,38 @@ class FinlyticApp extends StatelessWidget {
   }
 }
 
-class _AuthGate extends StatelessWidget {
+class _AuthGate extends StatefulWidget {
   const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  bool _timedOut = false;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    // If auth state hasn't resolved in 5 s, fall through to login screen.
+    _timer = Timer(const Duration(seconds: 5), () {
+      if (mounted) setState(() => _timedOut = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
+        if (snapshot.connectionState == ConnectionState.waiting && !_timedOut) {
           return const Scaffold(
             backgroundColor: AppTheme.light,
             body: Center(

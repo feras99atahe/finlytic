@@ -3,17 +3,11 @@ import 'package:uuid/uuid.dart';
 
 import '../database/db_helper.dart';
 import '../models/account.dart';
+import '../models/contact.dart';
 import '../models/debt.dart';
 import '../models/goal.dart';
 import '../models/transaction.dart' as txm;
 
-/// Encapsulates ALL business rules:
-///   - Income → Bank or Safe
-///   - Cash expense → Wallet only
-///   - Card expense → Bank only
-///   - Internal transfer → Safe → Wallet ONLY (the only allowed cash flow into the wallet)
-///   - Debt → expense tied to a contact
-///   - Opening Balance → seed transaction
 class FinanceService extends ChangeNotifier {
   final _uuid = const Uuid();
 
@@ -21,21 +15,27 @@ class FinanceService extends ChangeNotifier {
   List<txm.Transaction> _transactions = [];
   List<Goal> _goals = [];
   List<Debt> _debts = [];
+  List<Contact> _contacts = [];
 
   List<Account> get accounts => List.unmodifiable(_accounts);
   List<txm.Transaction> get transactions => List.unmodifiable(_transactions);
   List<Goal> get goals => List.unmodifiable(_goals);
   List<Debt> get debts => List.unmodifiable(_debts);
+  List<Contact> get contacts => List.unmodifiable(_contacts);
 
   List<Debt> get iOweDebts =>
       _debts.where((d) => d.direction == DebtDirection.iOwe).toList();
   List<Debt> get owesMeDebts =>
       _debts.where((d) => d.direction == DebtDirection.owesMe).toList();
 
-  double get totalIOwe =>
-      iOweDebts.fold(0.0, (s, d) => s + d.amount);
-  double get totalOwesMe =>
-      owesMeDebts.fold(0.0, (s, d) => s + d.amount);
+  double get totalIOwe => iOweDebts.fold(0.0, (s, d) => s + d.amount);
+  double get totalOwesMe => owesMeDebts.fold(0.0, (s, d) => s + d.amount);
+
+  /// All unique contact names that appear in any transaction.
+  Set<String> get allContactNames => _transactions
+      .where((t) => t.contact != null && t.contact!.isNotEmpty)
+      .map((t) => t.contact!)
+      .toSet();
 
   // -------------------- LOAD --------------------
   Future<void> load() async {
@@ -44,11 +44,13 @@ class FinanceService extends ChangeNotifier {
     final tRows = await db.query('transactions', orderBy: 'date DESC');
     final gRows = await db.query('goals', orderBy: 'createdAt DESC');
     final dRows = await db.query('debts', orderBy: 'createdAt DESC');
+    final cRows = await db.query('contacts', orderBy: 'name ASC');
 
     _accounts     = aRows.map(Account.fromMap).toList();
     _transactions = tRows.map(txm.Transaction.fromMap).toList();
     _goals        = gRows.map(Goal.fromMap).toList();
     _debts        = dRows.map(Debt.fromMap).toList();
+    _contacts     = cRows.map(Contact.fromMap).toList();
 
     if (_accounts.isEmpty) {
       await _seedDefaultAccounts();
@@ -67,6 +69,9 @@ class FinanceService extends ChangeNotifier {
     required String name,
     required AccountType type,
     double initialBalance = 0,
+    String currency = 'USD',
+    String? bankName,
+    String? notes,
   }) async {
     final db = await DBHelper.instance.database;
     final acc = Account(
@@ -75,6 +80,9 @@ class FinanceService extends ChangeNotifier {
       type: type,
       balance: 0,
       createdAt: DateTime.now(),
+      currency: currency,
+      bankName: bankName,
+      notes: notes,
     );
     await db.insert('accounts', acc.toMap());
     _accounts.add(acc);
@@ -85,6 +93,32 @@ class FinanceService extends ChangeNotifier {
       notifyListeners();
     }
     return acc;
+  }
+
+  Future<void> updateAccount(
+    String id, {
+    String? name,
+    String? currency,
+    String? bankName,
+    String? notes,
+    bool clearBankName = false,
+    bool clearNotes = false,
+  }) async {
+    final idx = _accounts.indexWhere((a) => a.id == id);
+    if (idx < 0) return;
+    final updated = _accounts[idx].copyWith(
+      name: name,
+      currency: currency,
+      bankName: bankName,
+      notes: notes,
+      clearBankName: clearBankName,
+      clearNotes: clearNotes,
+    );
+    final db = await DBHelper.instance.database;
+    await db.update('accounts', updated.toMap(),
+        where: 'id = ?', whereArgs: [id]);
+    _accounts[idx] = updated;
+    notifyListeners();
   }
 
   Future<void> deleteAccount(String id) async {
@@ -121,25 +155,47 @@ class FinanceService extends ChangeNotifier {
         where: 'id = ?', whereArgs: [accountId]);
   }
 
+  // -------------------- CONTACTS --------------------
+  Future<Contact> addContact({required String name, String? phone}) async {
+    final db = await DBHelper.instance.database;
+    final c = Contact(
+      id: _uuid.v4(),
+      name: name.trim(),
+      phone: phone?.trim().isEmpty == true ? null : phone?.trim(),
+      createdAt: DateTime.now(),
+    );
+    await db.insert('contacts', c.toMap());
+    _contacts.add(c);
+    _contacts.sort((a, b) => a.name.compareTo(b.name));
+    notifyListeners();
+    return c;
+  }
+
+  Future<void> deleteContact(String id) async {
+    final db = await DBHelper.instance.database;
+    await db.delete('contacts', where: 'id = ?', whereArgs: [id]);
+    _contacts.removeWhere((c) => c.id == id);
+    notifyListeners();
+  }
+
   // -------------------- TRANSACTIONS --------------------
 
-  /// Income: added to Bank OR Safe.
+  /// Income → any account.
   Future<void> addIncome({
     required String toAccountId,
     required double amount,
     String? note,
+    String? contact,
     DateTime? date,
   }) async {
     final acc = accountById(toAccountId);
     if (acc == null) throw 'Account not found';
-    if (acc.type == AccountType.wallet) {
-      throw 'Income cannot be added directly to Wallet. Use Safe → Wallet transfer.';
-    }
     await _writeTx(txm.Transaction(
       id: _uuid.v4(),
       type: txm.TxType.income,
       amount: amount,
       toAccountId: toAccountId,
+      contact: contact?.trim().isEmpty == true ? null : contact?.trim(),
       note: note,
       date: date ?? DateTime.now(),
     ));
@@ -165,20 +221,17 @@ class FinanceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Cash expense → must come from Wallet.
-  /// Card expense → must come from Bank.
+  /// Expense → any account.
   Future<void> addExpense({
     required String fromAccountId,
     required double amount,
     required String category,
     String? note,
+    String? contact,
     DateTime? date,
   }) async {
     final acc = accountById(fromAccountId);
     if (acc == null) throw 'Account not found';
-    if (acc.type == AccountType.safe) {
-      throw 'Expenses cannot be paid from Safe. Use Wallet (cash) or Bank (card).';
-    }
     if (acc.balance < amount) {
       throw 'Insufficient balance in ${acc.name}.';
     }
@@ -189,6 +242,7 @@ class FinanceService extends ChangeNotifier {
       amount: amount,
       fromAccountId: fromAccountId,
       category: category,
+      contact: contact?.trim().isEmpty == true ? null : contact?.trim(),
       note: note,
       date: date ?? DateTime.now(),
     ));
@@ -196,21 +250,22 @@ class FinanceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Debt — categorized expense linked to a contact.
+  /// Debt — linked to a contact.
+  /// [fromAccountId] null → I owe (just a record, no balance change).
+  /// [fromAccountId] set → I paid / I lent (deducts from that account).
   Future<void> addDebtTransaction({
-    required String fromAccountId,
+    String? fromAccountId,
     required double amount,
     required String contact,
     String? note,
     DateTime? date,
   }) async {
-    final acc = accountById(fromAccountId);
-    if (acc == null) throw 'Account not found';
-    if (acc.type == AccountType.safe) {
-      throw 'Pay debts from Wallet (cash) or Bank (card).';
-    }
-    if (acc.balance < amount) {
-      throw 'Insufficient balance in ${acc.name}.';
+    if (fromAccountId != null) {
+      final acc = accountById(fromAccountId);
+      if (acc == null) throw 'Account not found';
+      if (acc.balance < amount) {
+        throw 'Insufficient balance in ${acc.name}.';
+      }
     }
 
     await _writeTx(txm.Transaction(
@@ -223,11 +278,47 @@ class FinanceService extends ChangeNotifier {
       note: note,
       date: date ?? DateTime.now(),
     ));
-    await _updateBalance(fromAccountId, -amount);
+    if (fromAccountId != null) {
+      await _updateBalance(fromAccountId, -amount);
+    }
     notifyListeners();
   }
 
-  /// Internal transfer — only Safe → Wallet allowed.
+  /// Transfer between any two accounts.
+  Future<void> transfer({
+    required String fromAccountId,
+    required String toAccountId,
+    required double amount,
+    String? note,
+    DateTime? date,
+  }) async {
+    if (fromAccountId == toAccountId) {
+      throw 'Cannot transfer to the same account.';
+    }
+    final from = accountById(fromAccountId);
+    final to = accountById(toAccountId);
+    if (from == null || to == null) throw 'Account not found.';
+    if (from.balance < amount) {
+      throw 'Insufficient balance in ${from.name}.';
+    }
+
+    await _writeTx(txm.Transaction(
+      id: _uuid.v4(),
+      type: txm.TxType.transfer,
+      amount: amount,
+      fromAccountId: fromAccountId,
+      toAccountId: toAccountId,
+      note: (note == null || note.trim().isEmpty)
+          ? '${from.name} → ${to.name}'
+          : note.trim(),
+      date: date ?? DateTime.now(),
+    ));
+    await _updateBalance(fromAccountId, -amount);
+    await _updateBalance(toAccountId, amount);
+    notifyListeners();
+  }
+
+  /// Backward-compat shortcut used by CSV import.
   Future<void> transferSafeToWallet({
     required double amount,
     String? note,
@@ -238,27 +329,19 @@ class FinanceService extends ChangeNotifier {
     if (safe == null || wallet == null) {
       throw 'Safe or Wallet account missing.';
     }
-    if (safe.balance < amount) throw 'Insufficient balance in Safe.';
-
-    await _writeTx(txm.Transaction(
-      id: _uuid.v4(),
-      type: txm.TxType.transfer,
-      amount: amount,
+    await transfer(
       fromAccountId: safe.id,
       toAccountId: wallet.id,
-      note: note ?? 'Safe → Wallet',
-      date: date ?? DateTime.now(),
-    ));
-    await _updateBalance(safe.id, -amount);
-    await _updateBalance(wallet.id, amount);
-    notifyListeners();
+      amount: amount,
+      note: note,
+      date: date,
+    );
   }
 
   Future<void> deleteTransaction(String id) async {
     final db = await DBHelper.instance.database;
     final tx = _transactions.firstWhere((t) => t.id == id);
 
-    // Reverse balances
     switch (tx.type) {
       case txm.TxType.income:
       case txm.TxType.openingBalance:
@@ -339,7 +422,6 @@ class FinanceService extends ChangeNotifier {
   }
 
   // -------------------- DEBTS --------------------
-
   Future<Debt> addDebt({
     required DebtDirection direction,
     required double amount,
@@ -363,19 +445,12 @@ class FinanceService extends ChangeNotifier {
     return debt;
   }
 
-  /// Settle a debt: converts it to a transaction and removes the debt record.
-  ///
-  /// - iOwe   settled → expense from [accountId] (I paid someone back)
-  /// - owesMe settled → income to [accountId]   (they paid me back)
   Future<void> settleDebt(String debtId, String accountId) async {
     final debt = _debts.firstWhere((d) => d.id == debtId);
     final acc  = accountById(accountId);
     if (acc == null) throw 'Account not found';
 
     if (debt.direction == DebtDirection.iOwe) {
-      if (acc.type == AccountType.safe) {
-        throw 'Cannot pay from Safe. Use Wallet or Bank.';
-      }
       if (acc.balance < debt.amount) {
         throw 'Insufficient balance in ${acc.name}.';
       }
@@ -391,10 +466,6 @@ class FinanceService extends ChangeNotifier {
       ));
       await _updateBalance(accountId, -debt.amount);
     } else {
-      // owesMe → income
-      if (acc.type == AccountType.wallet) {
-        throw 'Income cannot go directly to Wallet. Use Bank or Safe.';
-      }
       await _writeTx(txm.Transaction(
         id: _uuid.v4(),
         type: txm.TxType.income,
@@ -420,40 +491,60 @@ class FinanceService extends ChangeNotifier {
     notifyListeners();
   }
 
+  // -------------------- RESET --------------------
+  Future<void> clearAllData() async {
+    final db = await DBHelper.instance.database;
+    await db.delete('transactions');
+    await db.delete('accounts');
+    await db.delete('goals');
+    await db.delete('debts');
+    await db.delete('contacts');
+    _transactions.clear();
+    _accounts.clear();
+    _goals.clear();
+    _debts.clear();
+    _contacts.clear();
+    await _seedDefaultAccounts();
+    notifyListeners();
+  }
+
   // -------------------- ANALYTICS --------------------
   double get totalBalance =>
       _accounts.fold(0.0, (s, a) => s + a.balance);
 
-  double incomeForMonth(DateTime month) {
+  double incomeForMonth(DateTime month, {String? contact}) {
     return _transactions
         .where((t) =>
             (t.type == txm.TxType.income ||
                 t.type == txm.TxType.openingBalance) &&
-            t.date.year == month.year && t.date.month == month.month)
+            t.date.year == month.year &&
+            t.date.month == month.month &&
+            (contact == null || t.contact == contact))
         .fold(0.0, (s, t) => s + t.amount);
   }
 
-  double expensesForMonth(DateTime month) {
+  double expensesForMonth(DateTime month, {String? contact}) {
     return _transactions
         .where((t) =>
             (t.type == txm.TxType.expense || t.type == txm.TxType.debt) &&
-            t.date.year == month.year && t.date.month == month.month)
+            t.date.year == month.year &&
+            t.date.month == month.month &&
+            (contact == null || t.contact == contact))
         .fold(0.0, (s, t) => s + t.amount);
   }
 
-  /// S = I − E for a given month.
-  double savingsForMonth(DateTime month) =>
-      incomeForMonth(month) - expensesForMonth(month);
+  double savingsForMonth(DateTime month, {String? contact}) =>
+      incomeForMonth(month, contact: contact) -
+      expensesForMonth(month, contact: contact);
 
-  /// Average monthly savings across all months that have any activity.
-  double get avgMonthlySavings {
+  double avgMonthlySavings({String? contact}) {
     if (_transactions.isEmpty) return 0;
     final byMonth = <String, double>{};
     for (final t in _transactions) {
+      if (contact != null && t.contact != contact) continue;
       final key = '${t.date.year}-${t.date.month}';
       byMonth.putIfAbsent(key, () => 0);
-      if (t.type == txm.TxType.income ||
-          t.type == txm.TxType.openingBalance) {
+      if (t.type == txm.TxType.income || t.type == txm.TxType.openingBalance) {
         byMonth[key] = byMonth[key]! + t.amount;
       } else if (t.type == txm.TxType.expense || t.type == txm.TxType.debt) {
         byMonth[key] = byMonth[key]! - t.amount;
@@ -464,41 +555,39 @@ class FinanceService extends ChangeNotifier {
     return sum / byMonth.length;
   }
 
-  /// % delta in spending vs previous month.
-  double spendingDeltaPct(DateTime month) {
+  double spendingDeltaPct(DateTime month, {String? contact}) {
     final prev = DateTime(month.year, month.month - 1);
-    final cur = expensesForMonth(month);
-    final pre = expensesForMonth(prev);
+    final cur = expensesForMonth(month, contact: contact);
+    final pre = expensesForMonth(prev, contact: contact);
     if (pre <= 0) return cur > 0 ? 100 : 0;
     return ((cur - pre) / pre) * 100;
   }
 
-  /// { category : amount } for expenses & debts in a month.
-  Map<String, double> categoryBreakdown(DateTime month) {
+  Map<String, double> categoryBreakdown(DateTime month, {String? contact}) {
     final map = <String, double>{};
     for (final t in _transactions) {
       if (t.date.year != month.year || t.date.month != month.month) continue;
       if (t.type != txm.TxType.expense && t.type != txm.TxType.debt) continue;
+      if (contact != null && t.contact != contact) continue;
       final c = t.category ?? 'Other';
       map[c] = (map[c] ?? 0) + t.amount;
     }
     return map;
   }
 
-  /// Compare a category between this month and last month.
-  double categoryDelta(String category, DateTime month) {
+  double categoryDelta(String category, DateTime month, {String? contact}) {
     final prev = DateTime(month.year, month.month - 1);
-    final cur = categoryBreakdown(month)[category] ?? 0;
-    final pre = categoryBreakdown(prev)[category] ?? 0;
+    final cur = categoryBreakdown(month, contact: contact)[category] ?? 0;
+    final pre = categoryBreakdown(prev, contact: contact)[category] ?? 0;
     return cur - pre;
   }
 
-  /// Cash vs Card expense split for a month.
-  ({double cash, double card}) cashVsCard(DateTime month) {
+  ({double cash, double card}) cashVsCard(DateTime month, {String? contact}) {
     double cash = 0, card = 0;
     for (final t in _transactions) {
       if (t.date.year != month.year || t.date.month != month.month) continue;
       if (t.type != txm.TxType.expense && t.type != txm.TxType.debt) continue;
+      if (contact != null && t.contact != contact) continue;
       final acc = accountById(t.fromAccountId);
       if (acc == null) continue;
       if (acc.type == AccountType.bank) {
@@ -510,7 +599,6 @@ class FinanceService extends ChangeNotifier {
     return (cash: cash, card: card);
   }
 
-  /// Filtered transaction list.
   List<txm.Transaction> filtered({
     DateTime? from,
     DateTime? to,
@@ -518,12 +606,14 @@ class FinanceService extends ChangeNotifier {
     bool? cashOnly,
     bool? cardOnly,
     txm.TxType? type,
+    String? contact,
   }) {
     return _transactions.where((t) {
       if (from != null && t.date.isBefore(from)) return false;
       if (to != null && t.date.isAfter(to)) return false;
       if (category != null && t.category != category) return false;
       if (type != null && t.type != type) return false;
+      if (contact != null && t.contact != contact) return false;
       if (cashOnly == true || cardOnly == true) {
         final acc = accountById(t.fromAccountId);
         if (acc == null) return false;

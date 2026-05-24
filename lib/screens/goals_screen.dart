@@ -13,7 +13,7 @@ class GoalsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final avg = svc.avgMonthlySavings;
+    final avg = svc.avgMonthlySavings();
 
     return CustomScrollView(
       slivers: [

@@ -17,6 +17,7 @@ class AnalyticsScreen extends StatefulWidget {
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   late DateTime _month;
+  String? _contactFilter;
 
   @override
   void initState() {
@@ -31,15 +32,32 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
   }
 
+  Future<void> _pickContact(BuildContext context, FinanceService svc) async {
+    final names = svc.allContactNames.toList()..sort();
+    await showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _ContactFilterSheet(
+        names: names,
+        selected: _contactFilter,
+        onPick: (name) {
+          setState(() => _contactFilter = name);
+          Navigator.pop(context);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final income   = svc.incomeForMonth(_month);
-    final expense  = svc.expensesForMonth(_month);
-    final savings  = svc.savingsForMonth(_month);
-    final delta    = svc.spendingDeltaPct(_month);
-    final breakdown = svc.categoryBreakdown(_month);
-    final cashCard = svc.cashVsCard(_month);
+    final income    = svc.incomeForMonth(_month, contact: _contactFilter);
+    final expense   = svc.expensesForMonth(_month, contact: _contactFilter);
+    final savings   = svc.savingsForMonth(_month, contact: _contactFilter);
+    final delta     = svc.spendingDeltaPct(_month, contact: _contactFilter);
+    final breakdown = svc.categoryBreakdown(_month, contact: _contactFilter);
+    final cashCard  = svc.cashVsCard(_month, contact: _contactFilter);
 
     final prevMonth = DateTime(_month.year, _month.month - 1);
     final prevExpense = svc.expensesForMonth(prevMonth);
@@ -86,6 +104,63 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   month: _month,
                   onPrev: () => _shift(-1),
                   onNext: () => _shift(1),
+                ),
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () => _pickContact(context, svc),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _contactFilter != null
+                          ? AppTheme.orange.withAlpha(20)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _contactFilter != null
+                            ? AppTheme.orange
+                            : AppTheme.lightGray,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          _contactFilter != null
+                              ? Icons.person_rounded
+                              : Icons.person_outline_rounded,
+                          size: 16,
+                          color: _contactFilter != null
+                              ? AppTheme.orange
+                              : AppTheme.midGray,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _contactFilter ?? 'All contacts',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: _contactFilter != null
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: _contactFilter != null
+                                  ? AppTheme.orange
+                                  : AppTheme.midGray,
+                            ),
+                          ),
+                        ),
+                        if (_contactFilter != null)
+                          GestureDetector(
+                            onTap: () =>
+                                setState(() => _contactFilter = null),
+                            child: const Icon(Icons.clear_rounded,
+                                size: 16, color: AppTheme.orange),
+                          )
+                        else
+                          const Icon(Icons.expand_more_rounded,
+                              size: 16, color: AppTheme.midGray),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -260,7 +335,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       final color = AppTheme.categoryColors[e.key] ??
                           AppTheme.midGray;
                       final pct = expense > 0 ? e.value / expense : 0.0;
-                      final dlt = svc.categoryDelta(e.key, _month);
+                      final dlt = svc.categoryDelta(e.key, _month, contact: _contactFilter);
                       return _CategoryRow(
                         name: e.key,
                         amount: e.value,
@@ -501,6 +576,95 @@ class _SplitCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+// ── Contact filter bottom sheet ───────────────────────────────────────────────
+class _ContactFilterSheet extends StatelessWidget {
+  final List<String> names;
+  final String? selected;
+  final ValueChanged<String?> onPick;
+
+  const _ContactFilterSheet({
+    required this.names,
+    required this.selected,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: Container(
+            width: 36, height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.lightGray,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text('Filter by contact',
+              style: GoogleFonts.poppins(
+                  fontSize: 15, fontWeight: FontWeight.w600,
+                  color: AppTheme.dark)),
+        ),
+        ListTile(
+          leading: const Icon(Icons.people_outline_rounded,
+              color: AppTheme.midGray),
+          title: Text('All contacts',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w500, color: AppTheme.dark)),
+          selected: selected == null,
+          selectedTileColor: AppTheme.orange.withAlpha(15),
+          onTap: () => onPick(null),
+        ),
+        if (names.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Center(
+              child: Text('No contacts with transactions yet.',
+                  style: GoogleFonts.lora(
+                      fontSize: 13, color: AppTheme.midGray)),
+            ),
+          )
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.4,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: names
+                  .map((name) => ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: AppTheme.orange.withAlpha(25),
+                          child: Text(
+                            name[0].toUpperCase(),
+                            style: GoogleFonts.poppins(
+                                color: AppTheme.orange,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        title: Text(name,
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.dark)),
+                        selected: name == selected,
+                        selectedTileColor: AppTheme.orange.withAlpha(15),
+                        onTap: () => onPick(name),
+                      ))
+                  .toList(),
+            ),
+          ),
+        const SizedBox(height: 16),
+      ],
     );
   }
 }

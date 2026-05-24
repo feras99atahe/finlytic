@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 class DBHelper {
   DBHelper._();
@@ -11,7 +12,7 @@ class DBHelper {
   static Database? _db;
 
   static const _kDbName = 'finlytic.db';
-  static const _kDbVersion = 2;
+  static const _kDbVersion = 4;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -20,13 +21,20 @@ class DBHelper {
   }
 
   Future<Database> _open() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    if (kIsWeb) {
+      databaseFactory = databaseFactoryFfiWeb;
+    } else if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       sqfliteFfiInit();
       databaseFactory = databaseFactoryFfi;
     }
 
-    final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, _kDbName);
+    final String path;
+    if (kIsWeb) {
+      path = _kDbName; // web uses the name directly (stored in IndexedDB)
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      path = p.join(dir.path, _kDbName);
+    }
     return openDatabase(
       path,
       version: _kDbVersion,
@@ -42,7 +50,10 @@ class DBHelper {
         name        TEXT NOT NULL,
         type        TEXT NOT NULL,
         balance     REAL NOT NULL,
-        createdAt   INTEGER NOT NULL
+        createdAt   INTEGER NOT NULL,
+        currency    TEXT NOT NULL DEFAULT 'USD',
+        bankName    TEXT,
+        notes       TEXT
       )
     ''');
 
@@ -77,11 +88,21 @@ class DBHelper {
     ''');
 
     await _createDebtsTable(db);
+    await _createContactsTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createDebtsTable(db);
+    }
+    if (oldVersion < 3) {
+      await _createContactsTable(db);
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+          "ALTER TABLE accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'");
+      await db.execute('ALTER TABLE accounts ADD COLUMN bankName TEXT');
+      await db.execute('ALTER TABLE accounts ADD COLUMN notes TEXT');
     }
   }
 
@@ -98,6 +119,18 @@ class DBHelper {
       )
     ''');
     await db.execute('CREATE INDEX idx_debt_direction ON debts(direction)');
+  }
+
+  Future<void> _createContactsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE contacts (
+        id        TEXT PRIMARY KEY,
+        name      TEXT NOT NULL,
+        phone     TEXT,
+        createdAt INTEGER NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_contact_name ON contacts(name)');
   }
 
   Future<void> close() async {

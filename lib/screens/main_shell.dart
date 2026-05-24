@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
+import 'accounts_screen.dart';
 import 'add_debt_screen.dart';
 import 'add_transaction_screen.dart';
 import 'analytics_screen.dart';
 import 'balance_setup_screen.dart';
+import 'contacts_screen.dart';
 import 'debts_screen.dart';
 import 'goals_screen.dart';
 import 'home_screen.dart';
@@ -93,6 +95,12 @@ class _MainShellState extends State<MainShell> {
               } else if (value == 'import') {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const ImportScreen()));
+              } else if (value == 'contacts') {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const ContactsScreen()));
+              } else if (value == 'accounts') {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const AccountsScreen()));
               }
             },
             itemBuilder: (context) => [
@@ -130,6 +138,32 @@ class _MainShellState extends State<MainShell> {
                         color: AppTheme.dark),
                     const SizedBox(width: 12),
                     Text('Import CSV',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'contacts',
+                child: Row(
+                  children: [
+                    const Icon(Icons.people_outline_rounded,
+                        color: AppTheme.dark),
+                    const SizedBox(width: 12),
+                    Text('Contacts',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'accounts',
+                child: Row(
+                  children: [
+                    const Icon(Icons.account_balance_rounded,
+                        color: AppTheme.dark),
+                    const SizedBox(width: 12),
+                    Text('Accounts',
                         style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w500)),
                   ],

@@ -78,18 +78,17 @@ class _IncomeForm extends StatefulWidget {
 }
 
 class _IncomeFormState extends State<_IncomeForm> {
-  final _amount = TextEditingController();
-  final _note = TextEditingController();
+  final _amount  = TextEditingController();
+  final _note    = TextEditingController();
   String? _toId;
+  String? _contact;
   bool _opening = false;
   DateTime _date = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final eligible = svc.accounts
-        .where((a) => a.type != AccountType.wallet)
-        .toList();
+    final eligible = svc.accounts.toList();
     _toId ??= eligible.isNotEmpty ? eligible.first.id : null;
 
     return _FormFrame(
@@ -121,6 +120,11 @@ class _IncomeFormState extends State<_IncomeForm> {
         _DateField(
             value: _date, onChanged: (d) => setState(() => _date = d)),
         const SizedBox(height: 16),
+        _ContactPickerField(
+          value: _contact,
+          onChanged: (v) => setState(() => _contact = v),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _note,
           decoration: const InputDecoration(labelText: 'Note (optional)'),
@@ -146,6 +150,7 @@ class _IncomeFormState extends State<_IncomeForm> {
         await svc.addIncome(
             toAccountId: _toId!,
             amount: amt,
+            contact: _contact,
             note: _note.text,
             date: _date);
       }
@@ -164,10 +169,11 @@ class _ExpenseForm extends StatefulWidget {
 }
 
 class _ExpenseFormState extends State<_ExpenseForm> {
-  final _amount = TextEditingController();
-  final _note = TextEditingController();
+  final _amount  = TextEditingController();
+  final _note    = TextEditingController();
   String _category = 'Food';
   String? _fromId;
+  String? _contact;
   DateTime _date = DateTime.now();
 
   static const _categories = [
@@ -178,9 +184,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final eligible = svc.accounts
-        .where((a) => a.type != AccountType.safe)
-        .toList();
+    final eligible = svc.accounts.toList();
     _fromId ??= eligible.isNotEmpty ? eligible.first.id : null;
 
     return _FormFrame(
@@ -192,14 +196,6 @@ class _ExpenseFormState extends State<_ExpenseForm> {
           accounts: eligible,
           selectedId: _fromId,
           onChanged: (id) => setState(() => _fromId = id),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Wallet → cash · Bank → card. Safe is for storage only.',
-          style: GoogleFonts.lora(
-              fontSize: 11,
-              color: AppTheme.midGray,
-              fontStyle: FontStyle.italic),
         ),
         const SizedBox(height: 20),
         _Label('Category'),
@@ -238,6 +234,11 @@ class _ExpenseFormState extends State<_ExpenseForm> {
         _DateField(
             value: _date, onChanged: (d) => setState(() => _date = d)),
         const SizedBox(height: 16),
+        _ContactPickerField(
+          value: _contact,
+          onChanged: (v) => setState(() => _contact = v),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _note,
           decoration: const InputDecoration(labelText: 'Note (optional)'),
@@ -256,6 +257,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             fromAccountId: _fromId!,
             amount: amt,
             category: _category,
+            contact: _contact,
             note: _note.text,
             date: _date,
           );
@@ -275,77 +277,47 @@ class _TransferForm extends StatefulWidget {
 
 class _TransferFormState extends State<_TransferForm> {
   final _amount = TextEditingController();
-  final _note = TextEditingController();
+  final _note   = TextEditingController();
+  String? _fromId;
+  String? _toId;
   DateTime _date = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final safe = svc.firstOfType(AccountType.safe);
-    final wallet = svc.firstOfType(AccountType.wallet);
+    final fromAccounts = svc.accounts.toList();
+    final toAccounts = svc.accounts
+        .where((a) => a.id != _fromId)
+        .toList();
+
+    _fromId ??= fromAccounts.isNotEmpty ? fromAccounts.first.id : null;
+    if (_toId == _fromId) _toId = null;
+    _toId ??= toAccounts.isNotEmpty ? toAccounts.first.id : null;
 
     return _FormFrame(
       children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.greenTint,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.green.withOpacity(.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.swap_horiz_rounded,
-                  color: AppTheme.green, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.lora(
-                        fontSize: 13, color: AppTheme.dark, height: 1.4),
-                    children: [
-                      const TextSpan(text: 'The only allowed cash flow:\n'),
-                      TextSpan(
-                        text: 'Safe → Wallet',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.dark,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
         _AmountField(controller: _amount),
         const SizedBox(height: 24),
-        Row(
-          children: [
-            Expanded(
-              child: _AccountStatic(
-                label: 'FROM',
-                name: safe?.name ?? '—',
-                color: AppTheme.green,
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Icon(Icons.east_rounded, color: AppTheme.midGray),
-            ),
-            Expanded(
-              child: _AccountStatic(
-                label: 'TO',
-                name: wallet?.name ?? '—',
-                color: AppTheme.orange,
-              ),
-            ),
-          ],
+
+        _Label('From'),
+        _AccountPicker(
+          accounts: fromAccounts,
+          selectedId: _fromId,
+          onChanged: (id) => setState(() {
+            _fromId = id;
+            if (_toId == id) _toId = null;
+          }),
         ),
         const SizedBox(height: 20),
+
+        _Label('To'),
+        _AccountPicker(
+          accounts: toAccounts,
+          selectedId: _toId,
+          onChanged: (id) => setState(() => _toId = id),
+        ),
+        const SizedBox(height: 20),
+
         _DateField(
             value: _date, onChanged: (d) => setState(() => _date = d)),
         const SizedBox(height: 16),
@@ -361,10 +333,19 @@ class _TransferFormState extends State<_TransferForm> {
 
   Future<void> _submit() async {
     final amt = double.tryParse(_amount.text);
-    if (amt == null || amt <= 0) return;
+    if (amt == null || amt <= 0 || _fromId == null || _toId == null) return;
+    if (_fromId == _toId) {
+      _toast(context, 'Source and destination must be different accounts.');
+      return;
+    }
     try {
-      await context.read<FinanceService>().transferSafeToWallet(
-          amount: amt, note: _note.text, date: _date);
+      await context.read<FinanceService>().transfer(
+            fromAccountId: _fromId!,
+            toAccountId: _toId!,
+            amount: amt,
+            note: _note.text,
+            date: _date,
+          );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       _toast(context, e.toString());
@@ -381,39 +362,67 @@ class _DebtForm extends StatefulWidget {
 
 class _DebtFormState extends State<_DebtForm> {
   final _amount = TextEditingController();
-  final _contact = TextEditingController();
-  final _note = TextEditingController();
+  final _note   = TextEditingController();
+  // true = I owe (just record, no account deduction)
+  // false = I paid / I lent (deduct from an account)
+  bool _iOwe = true;
   String? _fromId;
+  String? _contact;
   DateTime _date = DateTime.now();
 
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
-    final eligible = svc.accounts
-        .where((a) => a.type != AccountType.safe)
-        .toList();
-    _fromId ??= eligible.isNotEmpty ? eligible.first.id : null;
+    final eligible = svc.accounts.toList();
+    if (!_iOwe) _fromId ??= eligible.isNotEmpty ? eligible.first.id : null;
 
     return _FormFrame(
       children: [
-        _AmountField(controller: _amount),
-        const SizedBox(height: 24),
-        _Label('Owed to (contact)'),
-        TextField(
-          controller: _contact,
-          decoration: const InputDecoration(
-            hintText: 'e.g. Sara, Ahmed, John…',
-            prefixIcon: Icon(Icons.person_outline_rounded,
-                color: AppTheme.midGray),
+        // Mode toggle
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.lightGray),
+          ),
+          padding: const EdgeInsets.all(4),
+          child: Row(
+            children: [
+              _ModeChip(
+                label: 'I owe',
+                subtitle: 'Will pay later',
+                icon: Icons.hourglass_bottom_rounded,
+                selected: _iOwe,
+                onTap: () => setState(() => _iOwe = true),
+              ),
+              _ModeChip(
+                label: 'I paid / lent',
+                subtitle: 'Money left my account',
+                icon: Icons.payments_outlined,
+                selected: !_iOwe,
+                onTap: () => setState(() => _iOwe = false),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 20),
-        _Label('Pay from'),
-        _AccountPicker(
-          accounts: eligible,
-          selectedId: _fromId,
-          onChanged: (id) => setState(() => _fromId = id),
+        _AmountField(controller: _amount),
+        const SizedBox(height: 24),
+        _Label(_iOwe ? 'Owed to (contact)' : 'Contact'),
+        _ContactPickerField(
+          value: _contact,
+          onChanged: (v) => setState(() => _contact = v),
+          hint: 'Select or type contact name *',
         ),
+        if (!_iOwe) ...[
+          const SizedBox(height: 20),
+          _Label('Pay from account'),
+          _AccountPicker(
+            accounts: eligible,
+            selectedId: _fromId,
+            onChanged: (id) => setState(() => _fromId = id),
+          ),
+        ],
         const SizedBox(height: 20),
         _DateField(
             value: _date, onChanged: (d) => setState(() => _date = d)),
@@ -423,23 +432,30 @@ class _DebtFormState extends State<_DebtForm> {
           decoration: const InputDecoration(labelText: 'Note (optional)'),
         ),
         const SizedBox(height: 28),
-        _SubmitButton(label: 'Log debt payment', onTap: _submit),
+        _SubmitButton(
+          label: _iOwe ? 'Record debt (I owe)' : 'Log payment / loan',
+          onTap: _submit,
+        ),
       ],
     );
   }
 
   Future<void> _submit() async {
     final amt = double.tryParse(_amount.text);
-    if (amt == null || amt <= 0 || _fromId == null) return;
-    if (_contact.text.trim().isEmpty) {
-      _toast(context, 'Please enter the contact name.');
+    if (amt == null || amt <= 0) return;
+    if (_contact == null || _contact!.trim().isEmpty) {
+      _toast(context, 'Please select or enter a contact name.');
+      return;
+    }
+    if (!_iOwe && _fromId == null) {
+      _toast(context, 'Please select which account to pay from.');
       return;
     }
     try {
       await context.read<FinanceService>().addDebtTransaction(
-            fromAccountId: _fromId!,
+            fromAccountId: _iOwe ? null : _fromId,
             amount: amt,
-            contact: _contact.text.trim(),
+            contact: _contact!.trim(),
             note: _note.text,
             date: _date,
           );
@@ -450,7 +466,303 @@ class _DebtFormState extends State<_DebtForm> {
   }
 }
 
-// ─────────────────────────── Shared form bits ───────────────────────────
+class _ModeChip extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ModeChip({
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          decoration: BoxDecoration(
+            color: selected ? AppTheme.dark : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            children: [
+              Icon(icon,
+                  size: 20,
+                  color: selected ? AppTheme.light : AppTheme.midGray),
+              const SizedBox(height: 4),
+              Text(label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? AppTheme.light : AppTheme.dark,
+                  )),
+              Text(subtitle,
+                  style: GoogleFonts.lora(
+                      fontSize: 10,
+                      color: selected
+                          ? AppTheme.light.withAlpha(180)
+                          : AppTheme.midGray)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── Contact picker ───────────────────────────
+class _ContactPickerField extends StatelessWidget {
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  final String hint;
+
+  const _ContactPickerField({
+    required this.value,
+    required this.onChanged,
+    this.hint = 'Add contact (optional)',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        final result = await showModalBottomSheet<String?>(
+          context: context,
+          isScrollControlled: true,
+          useSafeArea: true,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          builder: (_) => _ContactSheet(initial: value),
+        );
+        if (result != null) {
+          onChanged(result.isEmpty ? null : result);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.lightGray),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value != null
+                  ? Icons.person_rounded
+                  : Icons.person_outline_rounded,
+              color: value != null ? AppTheme.orange : AppTheme.midGray,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                value ?? hint,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight:
+                      value != null ? FontWeight.w500 : FontWeight.w400,
+                  color:
+                      value != null ? AppTheme.dark : AppTheme.midGray,
+                ),
+              ),
+            ),
+            if (value != null)
+              GestureDetector(
+                onTap: () => onChanged(null),
+                child: const Icon(Icons.clear_rounded,
+                    size: 18, color: AppTheme.midGray),
+              )
+            else
+              const Icon(Icons.expand_more_rounded,
+                  size: 20, color: AppTheme.midGray),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ContactSheet extends StatefulWidget {
+  final String? initial;
+  const _ContactSheet({this.initial});
+
+  @override
+  State<_ContactSheet> createState() => _ContactSheetState();
+}
+
+class _ContactSheetState extends State<_ContactSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final svc = context.watch<FinanceService>();
+    final contacts = svc.contacts
+        .where((c) =>
+            _query.isEmpty ||
+            c.name.toLowerCase().contains(_query.toLowerCase()))
+        .toList();
+
+    final typedNotInList = _query.isNotEmpty &&
+        !contacts.any(
+            (c) => c.name.toLowerCase() == _query.toLowerCase());
+
+    return Padding(
+      padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: AppTheme.lightGray,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+
+          // Search
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: TextField(
+              controller: _search,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                hintText: 'Search or type a name…',
+                hintStyle: GoogleFonts.poppins(color: AppTheme.midGray),
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _query.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded),
+                        onPressed: () => setState(
+                            () { _search.clear(); _query = ''; }),
+                      )
+                    : null,
+                filled: true,
+                fillColor: AppTheme.light,
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppTheme.lightGray)),
+                enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppTheme.lightGray)),
+              ),
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                // Clear option
+                if (widget.initial != null)
+                  ListTile(
+                    leading: const Icon(Icons.person_off_outlined,
+                        color: AppTheme.midGray),
+                    title: Text('No contact',
+                        style: GoogleFonts.poppins(
+                            color: AppTheme.midGray,
+                            fontWeight: FontWeight.w500)),
+                    onTap: () => Navigator.pop(context, ''),
+                  ),
+
+                // Saved contacts
+                ...contacts.map((c) => ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: AppTheme.orange.withAlpha(30),
+                        child: Text(
+                          c.name[0].toUpperCase(),
+                          style: GoogleFonts.poppins(
+                            color: AppTheme.orange,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      title: Text(c.name,
+                          style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.dark)),
+                      subtitle: c.phone != null
+                          ? Text(c.phone!,
+                              style: GoogleFonts.lora(
+                                  fontSize: 12, color: AppTheme.midGray))
+                          : null,
+                      selected: c.name == widget.initial,
+                      selectedTileColor:
+                          AppTheme.orange.withAlpha(15),
+                      onTap: () => Navigator.pop(context, c.name),
+                    )),
+
+                // Use typed name if not in list
+                if (typedNotInList)
+                  ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: AppTheme.greenTint,
+                      child: Icon(Icons.add_rounded,
+                          color: AppTheme.green, size: 20),
+                    ),
+                    title: Text('Use "$_query"',
+                        style: GoogleFonts.poppins(
+                            color: AppTheme.green,
+                            fontWeight: FontWeight.w500)),
+                    subtitle: Text('Type a custom name',
+                        style: GoogleFonts.lora(
+                            fontSize: 12, color: AppTheme.midGray)),
+                    onTap: () => Navigator.pop(context, _query),
+                  ),
+
+                // Empty state
+                if (contacts.isEmpty && !typedNotInList)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        'No contacts yet. Type a name above.',
+                        style: GoogleFonts.lora(
+                            fontSize: 13, color: AppTheme.midGray),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────── Shared form widgets ───────────────────────────
 class _FormFrame extends StatelessWidget {
   final List<Widget> children;
   const _FormFrame({required this.children});
@@ -511,7 +823,8 @@ class _AmountField extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               autofocus: true,
               style: GoogleFonts.poppins(
                 fontSize: 36,
@@ -602,54 +915,6 @@ class _AccountPicker extends StatelessWidget {
   }
 }
 
-class _AccountStatic extends StatelessWidget {
-  final String label, name;
-  final Color color;
-  const _AccountStatic(
-      {required this.label, required this.name, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.lightGray),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: GoogleFonts.poppins(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1.4,
-                color: AppTheme.midGray,
-              )),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                      color: color, shape: BoxShape.circle)),
-              const SizedBox(width: 8),
-              Text(name,
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.dark,
-                  )),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DateField extends StatelessWidget {
   final DateTime value;
   final ValueChanged<DateTime> onChanged;
@@ -669,7 +934,8 @@ class _DateField extends StatelessWidget {
         if (picked != null) onChanged(picked);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),

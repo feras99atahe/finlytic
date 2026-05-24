@@ -69,23 +69,49 @@ class TransactionTile extends StatelessWidget {
   }
 
   String get _title {
-    if (tx.type == txm.TxType.transfer) {
-      return '${fromAccountName ?? 'From'} → ${toAccountName ?? 'To'}';
+    switch (tx.type) {
+      case txm.TxType.transfer:
+        return 'Transfer';
+      case txm.TxType.debt:
+        return tx.category ?? 'Debt';
+      case txm.TxType.openingBalance:
+        return 'Opening Balance';
+      case txm.TxType.income:
+        return 'Income';
+      case txm.TxType.expense:
+        return tx.category ?? 'Expense';
     }
-    if (tx.type == txm.TxType.debt) {
-      return 'Debt · ${tx.contact ?? 'Unknown'}';
+  }
+
+  /// Returns the "from → to" flow label shown below the title.
+  String get _flowLabel {
+    switch (tx.type) {
+      case txm.TxType.income:
+      case txm.TxType.openingBalance:
+        return '→ ${toAccountName ?? '—'}';
+      case txm.TxType.expense:
+        final parts = <String>[];
+        if (fromAccountName != null) parts.add(fromAccountName!);
+        if (tx.contact != null && tx.contact!.isNotEmpty) {
+          parts.add(tx.contact!);
+        }
+        return parts.isNotEmpty ? '${parts.first} →' : '—';
+      case txm.TxType.debt:
+        final from = fromAccountName ?? '—';
+        final to = tx.contact ?? '—';
+        return '$from → $to';
+      case txm.TxType.transfer:
+        final from = fromAccountName ?? '—';
+        final to = toAccountName ?? '—';
+        return '$from → $to';
     }
-    if (tx.type == txm.TxType.openingBalance) {
-      return 'Opening · ${toAccountName ?? ''}';
-    }
-    if (tx.type == txm.TxType.income) {
-      return 'Income · ${toAccountName ?? ''}';
-    }
-    return tx.category ?? 'Expense';
   }
 
   @override
   Widget build(BuildContext context) {
+    final dateStr = DateFormat('MMM d').format(tx.date);
+    final hasNote = tx.note != null && tx.note!.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -109,6 +135,7 @@ class TransactionTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Title row
                 Text(
                   _title,
                   style: GoogleFonts.poppins(
@@ -117,14 +144,46 @@ class TransactionTile extends StatelessWidget {
                     color: AppTheme.dark,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
+                // Flow: from → to
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _tint,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        _flowLabel,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _color,
+                        ),
+                      ),
+                    ),
+                    if (tx.contact != null &&
+                        tx.contact!.isNotEmpty &&
+                        tx.type == txm.TxType.income) ...[
+                      const SizedBox(width: 5),
+                      Text(
+                        'from ${tx.contact}',
+                        style: GoogleFonts.lora(
+                            fontSize: 11, color: AppTheme.midGray),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 3),
+                // Date · note
                 Text(
-                  '${DateFormat('MMM d').format(tx.date)}'
-                  '${tx.note != null && tx.note!.isNotEmpty ? ' · ${tx.note}' : ''}',
+                  hasNote ? '$dateStr · ${tx.note}' : dateStr,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.lora(
-                      fontSize: 12, color: AppTheme.midGray),
+                      fontSize: 11, color: AppTheme.midGray),
                 ),
               ],
             ),

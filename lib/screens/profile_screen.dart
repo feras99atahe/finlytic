@@ -143,6 +143,149 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _deleteAllData() async {
+    // Step 1: Warning confirmation
+    final step1 = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded,
+                color: AppTheme.orange, size: 22),
+            const SizedBox(width: 8),
+            Text('Delete everything?',
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will permanently erase:',
+              style: GoogleFonts.poppins(
+                  fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            ...['All transactions', 'All accounts & balances',
+                'All goals', 'All debts', 'All contacts']
+                .map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.remove_circle_outline_rounded,
+                              size: 14, color: AppTheme.orange),
+                          const SizedBox(width: 6),
+                          Text(item,
+                              style: GoogleFonts.lora(
+                                  fontSize: 13, color: AppTheme.dark)),
+                        ],
+                      ),
+                    )),
+            const SizedBox(height: 10),
+            Text(
+              'Fresh empty accounts will be created. This action cannot be undone.',
+              style: GoogleFonts.lora(
+                  fontSize: 12,
+                  color: AppTheme.midGray,
+                  height: 1.5),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.orange),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (step1 != true || !mounted) return;
+
+    // Step 2: Type "DELETE" to confirm
+    final confirmCtrl = TextEditingController();
+    final step2 = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text('Type DELETE to confirm',
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700, fontSize: 15)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'To confirm, type the word DELETE in the field below.',
+                style: GoogleFonts.lora(
+                    fontSize: 13, color: AppTheme.midGray, height: 1.4),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: confirmCtrl,
+                autofocus: true,
+                textCapitalization: TextCapitalization.characters,
+                style: GoogleFonts.poppins(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: AppTheme.orange,
+                    letterSpacing: 2),
+                decoration: InputDecoration(
+                  hintText: 'DELETE',
+                  hintStyle: GoogleFonts.poppins(
+                      color: AppTheme.lightGray, letterSpacing: 2),
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(color: AppTheme.orange)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide:
+                          const BorderSide(color: AppTheme.orange, width: 2)),
+                ),
+                onChanged: (_) => setS(() {}),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: confirmCtrl.text.trim() == 'DELETE'
+                    ? AppTheme.orange
+                    : AppTheme.lightGray,
+              ),
+              onPressed: confirmCtrl.text.trim() == 'DELETE'
+                  ? () => Navigator.pop(ctx, true)
+                  : null,
+              child: const Text('Delete Forever'),
+            ),
+          ],
+        ),
+      ),
+    );
+    confirmCtrl.dispose();
+    if (step2 != true || !mounted) return;
+
+    try {
+      await context.read<FinanceService>().clearAllData();
+      if (mounted) {
+        _snack('All data deleted. Fresh accounts created.', color: AppTheme.green);
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) _snack('Failed: $e', color: AppTheme.orange);
+    }
+  }
+
   void _snack(String msg, {required Color color}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg,
@@ -357,6 +500,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 24),
             ],
+
+            // ---- DANGER ZONE ----
+            _sectionLabel('DANGER ZONE'),
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.orangeTint,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppTheme.orange.withAlpha(80)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.warning_amber_rounded,
+                          color: AppTheme.orange, size: 20),
+                      const SizedBox(width: 8),
+                      Text('Delete All Data',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.orange)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Permanently deletes all transactions, accounts, goals, debts, and contacts. This cannot be undone.',
+                    style: GoogleFonts.lora(
+                        fontSize: 12,
+                        color: AppTheme.orange,
+                        height: 1.5),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _deleteAllData,
+                      icon: const Icon(Icons.delete_forever_rounded),
+                      label: const Text('Delete All Records'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppTheme.orange,
+                        side: const BorderSide(color: AppTheme.orange),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
 
             Center(
               child: Column(

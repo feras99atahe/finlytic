@@ -13,7 +13,7 @@ extension AccountTypeX on AccountType {
     switch (this) {
       case AccountType.bank:   return 'Card payments & direct income';
       case AccountType.safe:   return 'Cash storage';
-      case AccountType.wallet: return 'Pocket money (from Safe only)';
+      case AccountType.wallet: return 'Pocket money';
     }
   }
 
@@ -27,6 +27,9 @@ class Account {
   final AccountType type;
   final double balance;
   final DateTime createdAt;
+  final String currency;
+  final String? bankName;
+  final String? notes;
 
   Account({
     required this.id,
@@ -34,14 +37,29 @@ class Account {
     required this.type,
     required this.balance,
     required this.createdAt,
+    this.currency = 'USD',
+    this.bankName,
+    this.notes,
   });
 
-  Account copyWith({String? name, double? balance}) => Account(
+  Account copyWith({
+    String? name,
+    double? balance,
+    String? currency,
+    String? bankName,
+    String? notes,
+    bool clearBankName = false,
+    bool clearNotes = false,
+  }) =>
+      Account(
         id: id,
         name: name ?? this.name,
         type: type,
         balance: balance ?? this.balance,
         createdAt: createdAt,
+        currency: currency ?? this.currency,
+        bankName: clearBankName ? null : (bankName ?? this.bankName),
+        notes: clearNotes ? null : (notes ?? this.notes),
       );
 
   Map<String, dynamic> toMap() => {
@@ -50,6 +68,9 @@ class Account {
         'type': type.name,
         'balance': balance,
         'createdAt': createdAt.millisecondsSinceEpoch,
+        'currency': currency,
+        'bankName': bankName,
+        'notes': notes,
       };
 
   factory Account.fromMap(Map<String, dynamic> m) => Account(
@@ -58,5 +79,8 @@ class Account {
         type: AccountTypeX.fromString(m['type'] as String),
         balance: (m['balance'] as num).toDouble(),
         createdAt: DateTime.fromMillisecondsSinceEpoch(m['createdAt'] as int),
+        currency: (m['currency'] as String?) ?? 'USD',
+        bankName: m['bankName'] as String?,
+        notes: m['notes'] as String?,
       );
 }

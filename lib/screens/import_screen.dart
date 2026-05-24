@@ -108,6 +108,7 @@ class _ImportScreenState extends State<ImportScreen> {
             await svc.addIncome(
               toAccountId: acc.id,
               amount: row.amount,
+              contact: row.contact,
               note: row.note,
               date: row.date,
             );
@@ -120,6 +121,7 @@ class _ImportScreenState extends State<ImportScreen> {
               fromAccountId: acc.id,
               amount: row.amount,
               category: row.category ?? 'Other',
+              contact: row.contact,
               note: row.note,
               date: row.date,
             );
