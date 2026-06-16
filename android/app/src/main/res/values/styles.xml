@@ -15,4 +15,12 @@
     <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
         <item name="android:windowBackground">?android:colorBackground</item>
     </style>
+
+    <!-- Dialog-style theme for the home-screen widget quick-add popup. Opaque
+         (dark) so Flutter composites reliably; the Flutter UI paints its own
+         dim scrim + centered card, so it still reads as a popup. -->
+    <style name="QuickAddTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

@@ -9,6 +9,15 @@ extension GoalTermX on GoalTerm {
     }
   }
 
+  /// Human-readable time range for this term.
+  String get range {
+    switch (this) {
+      case GoalTerm.shortTerm:  return '≤ 12 months';
+      case GoalTerm.mediumTerm: return '1 – 3 years';
+      case GoalTerm.longTerm:   return '3 + years';
+    }
+  }
+
   /// Recommended % of monthly savings to allocate.
   double get defaultAllocationPct {
     switch (this) {
@@ -20,6 +29,21 @@ extension GoalTermX on GoalTerm {
 
   static GoalTerm fromString(String s) =>
       GoalTerm.values.firstWhere((e) => e.name == s, orElse: () => GoalTerm.shortTerm);
+
+  /// Auto-classify a goal from the raw months needed at 100% savings allocation.
+  static GoalTerm fromMonths(int months) {
+    if (months <= 12) return GoalTerm.shortTerm;
+    if (months <= 36) return GoalTerm.mediumTerm;
+    return GoalTerm.longTerm;
+  }
+
+  /// Auto-classify directly from target amount and current monthly savings capacity.
+  /// [savingsCapacity] should be the effective monthly saving amount (salary − expenses).
+  static GoalTerm autoFrom(double targetAmount, double savingsCapacity) {
+    if (savingsCapacity <= 0) return GoalTerm.shortTerm;
+    final months = (targetAmount / savingsCapacity).ceil();
+    return fromMonths(months);
+  }
 }
 
 class Goal {

@@ -5,13 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
+import 'quick_add_popup.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/auth_service.dart';
 import 'services/finance_service.dart';
+import 'services/notification_service.dart';
+import 'services/widget_service.dart';
 import 'theme/app_theme.dart';
 
 bool firebaseAvailable = false;
+
+/// Entrypoint for the home-screen widget quick-add popup (translucent
+/// `QuickAddActivity`). Must live in the root library so the Flutter engine can
+/// resolve it by name; delegates to the popup UI in quick_add_popup.dart.
+@pragma('vm:entry-point')
+void quickAddMain(List<String> args) => runQuickAddPopup(args);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,18 +31,65 @@ void main() async {
   } catch (_) {
     // Firebase not configured for this platform — local-only mode.
   }
+
+  // Set up reminders (re-arms the schedule after a reboot) and the widget
+  // bridge. These are non-critical: a failure here must NEVER prevent the app
+  // UI from launching, otherwise the user is stuck on a black screen.
+  try {
+    await NotificationService.instance.init();
+    await NotificationService.instance.applySchedule();
+  } catch (e, st) {
+    debugPrint('Notification setup failed (ignored): $e\n$st');
+  }
+  try {
+    await WidgetService.init();
+  } catch (e, st) {
+    debugPrint('Widget setup failed (ignored): $e\n$st');
+  }
+
   runApp(const FinlyticApp());
 }
 
-class FinlyticApp extends StatelessWidget {
+class FinlyticApp extends StatefulWidget {
   const FinlyticApp({super.key});
+
+  @override
+  State<FinlyticApp> createState() => _FinlyticAppState();
+}
+
+class _FinlyticAppState extends State<FinlyticApp>
+    with WidgetsBindingObserver {
+  // Held so we can reload after the quick-add widget popup writes new data.
+  final FinanceService _finance = FinanceService()..load();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The home-screen quick-add popup runs in a separate engine and writes
+    // straight to the database; reload so its entries show when we resume.
+    if (state == AppLifecycleState.resumed) {
+      _finance.load();
+      WidgetService.updateBalance(_finance.totalBalance);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
-        ChangeNotifierProvider(create: (_) => FinanceService()..load()),
+        ChangeNotifierProvider.value(value: _finance),
       ],
       child: MaterialApp(
         title: 'Finlytic',

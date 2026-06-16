@@ -4,11 +4,17 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../models/account.dart';
+import '../models/transaction.dart' as txm;
 import '../services/finance_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/item_editor.dart';
 
 class AddTransactionScreen extends StatefulWidget {
-  const AddTransactionScreen({super.key});
+  /// Tab to open on: 0 = Income, 1 = Expense, 2 = Transfer, 3 = Debt.
+  /// Used by the home-screen quick-add widget to jump straight to a type.
+  final int initialTab;
+
+  const AddTransactionScreen({super.key, this.initialTab = 0});
 
   @override
   State<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -21,7 +27,11 @@ class _AddTransactionScreenState extends State<AddTransactionScreen>
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 4, vsync: this);
+    _tab = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTab.clamp(0, 3),
+    );
   }
 
   @override
@@ -84,6 +94,7 @@ class _IncomeFormState extends State<_IncomeForm> {
   String? _contact;
   bool _opening = false;
   DateTime _date = DateTime.now();
+  List<txm.TxItem> _items = const [];
 
   @override
   Widget build(BuildContext context) {
@@ -124,6 +135,13 @@ class _IncomeFormState extends State<_IncomeForm> {
           value: _contact,
           onChanged: (v) => setState(() => _contact = v),
         ),
+        if (!_opening) ...[
+          const SizedBox(height: 20),
+          ItemListEditor(
+            initial: _items,
+            onChanged: (items) => _items = items,
+          ),
+        ],
         const SizedBox(height: 16),
         TextField(
           controller: _note,
@@ -152,7 +170,8 @@ class _IncomeFormState extends State<_IncomeForm> {
             amount: amt,
             contact: _contact,
             note: _note.text,
-            date: _date);
+            date: _date,
+            items: _items);
       }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -175,6 +194,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   String? _fromId;
   String? _contact;
   DateTime _date = DateTime.now();
+  List<txm.TxItem> _items = const [];
 
   static const _categories = [
     'Food', 'Services', 'Restaurants', 'Personal',
@@ -238,6 +258,11 @@ class _ExpenseFormState extends State<_ExpenseForm> {
           value: _contact,
           onChanged: (v) => setState(() => _contact = v),
         ),
+        const SizedBox(height: 20),
+        ItemListEditor(
+          initial: _items,
+          onChanged: (items) => _items = items,
+        ),
         const SizedBox(height: 16),
         TextField(
           controller: _note,
@@ -260,6 +285,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             contact: _contact,
             note: _note.text,
             date: _date,
+            items: _items,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

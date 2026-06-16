@@ -8,6 +8,7 @@ import '../services/finance_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/money.dart';
 import '../widgets/transaction_tile.dart';
+import 'edit_transaction_screen.dart';
 
 enum _PaymentFilter { all, cash, card }
 
@@ -279,6 +280,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                     fromAccountName: svc.accountById(t.fromAccountId)?.name,
                     toAccountName: svc.accountById(t.toAccountId)?.name,
                     onDelete: () => _confirmDelete(t.id),
+                    onTap: () => _openEdit(t),
                   );
                 },
                 childCount: list.length,
@@ -307,6 +309,12 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) setState(() => _range = picked);
+  }
+
+  void _openEdit(txm.Transaction t) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => EditTransactionScreen(transaction: t),
+    ));
   }
 
   Future<void> _confirmDelete(String id) async {

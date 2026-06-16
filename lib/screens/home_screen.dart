@@ -10,6 +10,7 @@ import '../utils/money.dart';
 import '../widgets/account_card.dart';
 import '../widgets/common.dart';
 import '../widgets/transaction_tile.dart';
+import 'edit_transaction_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onSeeAllTransactions;
@@ -219,6 +220,12 @@ class HomeScreen extends StatelessWidget {
                               svc.accountById(t.fromAccountId)?.name,
                           toAccountName:
                               svc.accountById(t.toAccountId)?.name,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EditTransactionScreen(transaction: t),
+                            ),
+                          ),
                         );
                       },
                       childCount: recent.length,

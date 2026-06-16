@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../services/finance_service.dart';
+import '../services/widget_service.dart';
 import '../theme/app_theme.dart';
 import 'accounts_screen.dart';
 import 'add_debt_screen.dart';
@@ -12,6 +15,7 @@ import 'debts_screen.dart';
 import 'goals_screen.dart';
 import 'home_screen.dart';
 import 'import_screen.dart';
+import 'notification_settings_screen.dart';
 import 'profile_screen.dart';
 import 'transactions_screen.dart';
 
@@ -48,6 +52,10 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the home-screen widget's balance in sync with the latest total.
+    final total = context.watch<FinanceService>().totalBalance;
+    WidgetService.updateBalance(total);
+
     final pages = [
       HomeScreen(onSeeAllTransactions: () => _go(1)),
       const TransactionsScreen(),
@@ -101,6 +109,9 @@ class _MainShellState extends State<MainShell> {
               } else if (value == 'accounts') {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const AccountsScreen()));
+              } else if (value == 'reminders') {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const NotificationSettingsScreen()));
               }
             },
             itemBuilder: (context) => [
@@ -164,6 +175,19 @@ class _MainShellState extends State<MainShell> {
                         color: AppTheme.dark),
                     const SizedBox(width: 12),
                     Text('Accounts',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'reminders',
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_active_outlined,
+                        color: AppTheme.dark),
+                    const SizedBox(width: 12),
+                    Text('Reminders',
                         style: GoogleFonts.poppins(
                             fontWeight: FontWeight.w500)),
                   ],

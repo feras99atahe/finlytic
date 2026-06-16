@@ -13,6 +13,8 @@ class AppTheme {
   static const Color orange = Color(0xFFD97757); // primary accent
   static const Color blue   = Color(0xFF6A9BCC); // secondary accent
   static const Color green  = Color(0xFF788C5D); // tertiary accent
+  static const Color purple = Color(0xFF8B6BA8); // debt
+  static const Color slate  = Color(0xFF5C7A89); // opening balance
 
   // Semantic
   static const Color positive = green;   // savings / income
@@ -22,6 +24,8 @@ class AppTheme {
   static const Color orangeTint = Color(0xFFF6E4DA);
   static const Color blueTint   = Color(0xFFDFEAF4);
   static const Color greenTint  = Color(0xFFE2E8D5);
+  static const Color purpleTint = Color(0xFFEBE2F2);
+  static const Color slateTint  = Color(0xFFDDE6EA);
 
   // Category palette
   static const Map<String, Color> categoryColors = {

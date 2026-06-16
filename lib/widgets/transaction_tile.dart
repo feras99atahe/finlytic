@@ -10,6 +10,7 @@ class TransactionTile extends StatelessWidget {
   final String? fromAccountName;
   final String? toAccountName;
   final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   const TransactionTile({
     super.key,
@@ -17,6 +18,7 @@ class TransactionTile extends StatelessWidget {
     this.fromAccountName,
     this.toAccountName,
     this.onDelete,
+    this.onTap,
   });
 
   IconData get _icon {
@@ -31,27 +33,21 @@ class TransactionTile extends StatelessWidget {
 
   Color get _color {
     switch (tx.type) {
-      case txm.TxType.income:
-      case txm.TxType.openingBalance:
-        return AppTheme.green;
-      case txm.TxType.expense:
-      case txm.TxType.debt:
-        return AppTheme.orange;
-      case txm.TxType.transfer:
-        return AppTheme.blue;
+      case txm.TxType.income:         return AppTheme.green;
+      case txm.TxType.expense:        return AppTheme.orange;
+      case txm.TxType.transfer:       return AppTheme.blue;
+      case txm.TxType.debt:           return AppTheme.purple;
+      case txm.TxType.openingBalance: return AppTheme.slate;
     }
   }
 
   Color get _tint {
     switch (tx.type) {
-      case txm.TxType.income:
-      case txm.TxType.openingBalance:
-        return AppTheme.greenTint;
-      case txm.TxType.expense:
-      case txm.TxType.debt:
-        return AppTheme.orangeTint;
-      case txm.TxType.transfer:
-        return AppTheme.blueTint;
+      case txm.TxType.income:         return AppTheme.greenTint;
+      case txm.TxType.expense:        return AppTheme.orangeTint;
+      case txm.TxType.transfer:       return AppTheme.blueTint;
+      case txm.TxType.debt:           return AppTheme.purpleTint;
+      case txm.TxType.openingBalance: return AppTheme.slateTint;
     }
   }
 
@@ -107,12 +103,59 @@ class TransactionTile extends StatelessWidget {
     }
   }
 
+  /// Compact chips of the receipt items, capped at 3 with a "+N" overflow.
+  Widget _itemsRow() {
+    const maxChips = 3;
+    final shown = tx.items.take(maxChips).toList();
+    final extra = tx.items.length - shown.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 5),
+      child: Wrap(
+        spacing: 5,
+        runSpacing: 5,
+        children: [
+          for (final it in shown)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppTheme.light,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: AppTheme.lightGray),
+              ),
+              child: Text(
+                it.price > 0
+                    ? '${it.name} · ${Money.format(it.price)}'
+                    : it.name,
+                style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.dark),
+              ),
+            ),
+          if (extra > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: _tint,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                '+$extra',
+                style: GoogleFonts.poppins(
+                    fontSize: 10, fontWeight: FontWeight.w600, color: _color),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final dateStr = DateFormat('MMM d').format(tx.date);
     final hasNote = tx.note != null && tx.note!.isNotEmpty;
 
-    return Container(
+    final card = Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
@@ -185,6 +228,7 @@ class TransactionTile extends StatelessWidget {
                   style: GoogleFonts.lora(
                       fontSize: 11, color: AppTheme.midGray),
                 ),
+                if (tx.items.isNotEmpty) _itemsRow(),
               ],
             ),
           ),
@@ -213,6 +257,13 @@ class TransactionTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+
+    if (onTap == null) return card;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: card,
     );
   }
 }

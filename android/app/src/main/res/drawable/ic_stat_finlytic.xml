@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Monochrome status-bar/notification icon: white wallet silhouette with a
+     knocked-out clasp dot. Android tints this white and ignores colour. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M25 28 H75 A9 9 0 0 1 84 37 V67 A9 9 0 0 1 75 76 H25 A9 9 0 0 1 16 67 V37 A9 9 0 0 1 25 28 Z M63.5 52 A4.5 4.5 0 1 1 72.5 52 A4.5 4.5 0 1 1 63.5 52 Z" />
+</vector>

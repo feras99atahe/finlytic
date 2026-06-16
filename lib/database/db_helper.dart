@@ -12,7 +12,7 @@ class DBHelper {
   static Database? _db;
 
   static const _kDbName = 'finlytic.db';
-  static const _kDbVersion = 4;
+  static const _kDbVersion = 6;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -67,7 +67,8 @@ class DBHelper {
         category        TEXT,
         contact         TEXT,
         note            TEXT,
-        date            INTEGER NOT NULL
+        date            INTEGER NOT NULL,
+        items           TEXT
       )
     ''');
 
@@ -89,6 +90,7 @@ class DBHelper {
 
     await _createDebtsTable(db);
     await _createContactsTable(db);
+    await _createEditLogsTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -103,6 +105,12 @@ class DBHelper {
           "ALTER TABLE accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'");
       await db.execute('ALTER TABLE accounts ADD COLUMN bankName TEXT');
       await db.execute('ALTER TABLE accounts ADD COLUMN notes TEXT');
+    }
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE transactions ADD COLUMN items TEXT');
+    }
+    if (oldVersion < 6) {
+      await _createEditLogsTable(db);
     }
   }
 
@@ -119,6 +127,18 @@ class DBHelper {
       )
     ''');
     await db.execute('CREATE INDEX idx_debt_direction ON debts(direction)');
+  }
+
+  Future<void> _createEditLogsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE tx_edit_logs (
+        id        TEXT PRIMARY KEY,
+        txId      TEXT NOT NULL,
+        editedAt  INTEGER NOT NULL,
+        changes   TEXT NOT NULL
+      )
+    ''');
+    await db.execute('CREATE INDEX idx_editlog_tx ON tx_edit_logs(txId)');
   }
 
   Future<void> _createContactsTable(Database db) async {

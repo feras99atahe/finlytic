@@ -7,8 +7,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart' show firebaseAvailable;
 import '../services/auth_service.dart';
 import '../services/backup_service.dart';
-import '../services/finance_service.dart';
+import '../services/finance_service.dart' show FinanceService, IncomeSource;
 import '../theme/app_theme.dart';
+import '../utils/money.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,9 +18,22 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
+class _IncomeRow {
+  final TextEditingController name;
+  final TextEditingController amount;
+  _IncomeRow({String n = '', String a = ''})
+      : name = TextEditingController(text: n),
+        amount = TextEditingController(text: a);
+  void dispose() {
+    name.dispose();
+    amount.dispose();
+  }
+}
+
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final List<_IncomeRow> _incomeRows = [];
   String _currency = 'USD';
 
   final _backup = BackupService();
@@ -36,10 +50,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadProfile() async {
     final prefs = await SharedPreferences.getInstance();
+    final svc = context.read<FinanceService>();
     setState(() {
       _nameCtrl.text = prefs.getString('profile_name') ?? '';
       _phoneCtrl.text = prefs.getString('profile_phone') ?? '';
       _currency = prefs.getString('profile_currency') ?? 'USD';
+      for (final r in _incomeRows) {
+        r.dispose();
+      }
+      _incomeRows.clear();
+      if (svc.incomeSources.isNotEmpty) {
+        for (final src in svc.incomeSources) {
+          _incomeRows.add(_IncomeRow(
+            n: src.name,
+            a: src.amount > 0 ? src.amount.toStringAsFixed(0) : '',
+          ));
+        }
+      } else {
+        _incomeRows.add(_IncomeRow());
+      }
     });
   }
 
@@ -55,6 +84,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await prefs.setString('profile_name', _nameCtrl.text);
     await prefs.setString('profile_phone', _phoneCtrl.text);
     await prefs.setString('profile_currency', _currency);
+    final sources = _incomeRows
+        .map((r) {
+          final amt =
+              double.tryParse(r.amount.text.replaceAll(',', '')) ?? 0;
+          final n = r.name.text.trim();
+          if (n.isEmpty && amt <= 0) return null;
+          return IncomeSource(name: n.isEmpty ? 'Income' : n, amount: amt);
+        })
+        .whereType<IncomeSource>()
+        .toList();
+    if (!mounted) return;
+    await context.read<FinanceService>().setIncomeSources(sources);
     if (mounted) {
       _snack('Profile saved.', color: AppTheme.green);
     }
@@ -299,6 +340,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    for (final r in _incomeRows) {
+      r.dispose();
+    }
     super.dispose();
   }
 
@@ -386,6 +430,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 prefixIcon: Icon(Icons.phone_outlined),
               ),
             ),
+            const SizedBox(height: 16),
+
+            const SizedBox(height: 32),
+
+            _sectionLabel('MONTHLY INCOME SOURCES'),
+            const SizedBox(height: 6),
+            Text(
+              'Add every source of income you receive each month.',
+              style: GoogleFonts.lora(
+                  fontSize: 12,
+                  color: AppTheme.midGray,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 14),
+
+            ..._incomeRows.asMap().entries.map((e) {
+              final idx = e.key;
+              final row = e.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: TextField(
+                        controller: row.name,
+                        decoration: InputDecoration(
+                          labelText: 'Source ${idx + 1}',
+                          hintText: 'e.g. Main job, Freelance',
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: row.amount,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          prefixText: '\$ ',
+                          labelText: 'Amount',
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: _incomeRows.length > 1
+                          ? () => setState(() {
+                                _incomeRows[idx].dispose();
+                                _incomeRows.removeAt(idx);
+                              })
+                          : null,
+                      child: Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: _incomeRows.length > 1
+                              ? AppTheme.orangeTint
+                              : AppTheme.lightGray,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Icon(Icons.remove_rounded,
+                            size: 16,
+                            color: _incomeRows.length > 1
+                                ? AppTheme.orange
+                                : AppTheme.midGray),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+
+            // Total row
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 4),
+              child: Row(
+                children: [
+                  const Icon(Icons.account_balance_wallet_outlined,
+                      size: 15, color: AppTheme.midGray),
+                  const SizedBox(width: 6),
+                  Text('Total monthly income: ',
+                      style: GoogleFonts.poppins(
+                          fontSize: 12, color: AppTheme.midGray)),
+                  Text(
+                    Money.format(_incomeRows.fold(0.0, (s, r) {
+                      return s +
+                          (double.tryParse(
+                                  r.amount.text.replaceAll(',', '')) ??
+                              0);
+                    })) + '/mo',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.dark),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _incomeRows.add(_IncomeRow())),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text('Add income source'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.dark,
+                side: const BorderSide(color: AppTheme.lightGray),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: GoogleFonts.poppins(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
+
             const SizedBox(height: 32),
 
             _sectionLabel('PREFERENCES'),
