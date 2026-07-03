@@ -52,11 +52,6 @@ class _QuickAddPopupState extends State<QuickAddPopup> {
   String _category = 'Food';
   List<txm.TxItem> _items = const [];
 
-  static const _categories = [
-    'Food', 'Services', 'Restaurants', 'Personal',
-    'Transport', 'Shopping', 'Health', 'Entertain.', 'Other',
-  ];
-
   bool get _isIncome => widget.type == 'income';
   bool get _isExpense => widget.type == 'expense';
   bool get _isTransfer => widget.type == 'transfer';
@@ -275,9 +270,9 @@ class _QuickAddPopupState extends State<QuickAddPopup> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: _categories.map((c) {
+              children: _svc.categories.map((c) {
                 final sel = _category == c;
-                final col = AppTheme.categoryColors[c] ?? AppTheme.midGray;
+                final col = AppTheme.colorForCategory(c);
                 return GestureDetector(
                   onTap: () => setState(() => _category = c),
                   child: Container(

@@ -7,10 +7,26 @@ class AuthService extends ChangeNotifier {
   User? get currentUser => _auth.currentUser;
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
+  /// Whether the signed-in user has confirmed ownership of their email.
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
+
   Future<String?> register(String email, String password) async {
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final cred = await _auth.createUserWithEmailAndPassword(
           email: email.trim(), password: password);
+      // Confirm the user actually owns the email they signed up with.
+      await cred.user?.sendEmailVerification();
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return _message(e.code);
+    }
+  }
+
+  /// Re-sends the verification email to the current user (e.g. if the first
+  /// one expired or was lost). Returns null on success or an error message.
+  Future<String?> resendVerificationEmail() async {
+    try {
+      await _auth.currentUser?.sendEmailVerification();
       return null;
     } on FirebaseAuthException catch (e) {
       return _message(e.code);
@@ -45,7 +61,7 @@ class AuthService extends ChangeNotifier {
       case 'invalid-email':
         return 'Please enter a valid email address.';
       case 'weak-password':
-        return 'Password must be at least 6 characters.';
+        return 'Password must be at least 8 characters.';
       case 'user-not-found':
       case 'wrong-password':
       case 'invalid-credential':

@@ -45,6 +45,16 @@ class Transaction {
   final DateTime date;
   final List<TxItem> items;       // optional receipt-style breakdown
 
+  /// Two independent expense axes (see change spec §1–2):
+  ///  - [isRecurring]: fixed/recurring vs variable. This axis ALONE feeds the
+  ///    savings-capacity calculation.
+  ///  - [isEssential]: essential vs secondary. Analysis/CSV only — never enters
+  ///    a financial formula.
+  ///  - [recurrenceMonths]: record-only cadence (0 = never; n = every n months).
+  final bool isRecurring;
+  final bool isEssential;
+  final int recurrenceMonths;
+
   Transaction({
     required this.id,
     required this.type,
@@ -56,6 +66,9 @@ class Transaction {
     this.note,
     required this.date,
     this.items = const [],
+    this.isRecurring = false,
+    this.isEssential = false,
+    this.recurrenceMonths = 0,
   });
 
   /// Used to flag the source of cash flow (Cash vs Card) for filtering.
@@ -77,6 +90,9 @@ class Transaction {
     String? note,
     DateTime? date,
     List<TxItem>? items,
+    bool? isRecurring,
+    bool? isEssential,
+    int? recurrenceMonths,
     bool clearFromAccount = false,
     bool clearToAccount = false,
     bool clearCategory = false,
@@ -95,6 +111,9 @@ class Transaction {
         note: clearNote ? null : (note ?? this.note),
         date: date ?? this.date,
         items: items ?? this.items,
+        isRecurring: isRecurring ?? this.isRecurring,
+        isEssential: isEssential ?? this.isEssential,
+        recurrenceMonths: recurrenceMonths ?? this.recurrenceMonths,
       );
 
   Map<String, dynamic> toMap() => {
@@ -110,6 +129,9 @@ class Transaction {
         'items': items.isEmpty
             ? null
             : jsonEncode(items.map((e) => e.toMap()).toList()),
+        'is_recurring': isRecurring ? 1 : 0,
+        'is_essential': isEssential ? 1 : 0,
+        'recurrence_months': recurrenceMonths,
       };
 
   factory Transaction.fromMap(Map<String, dynamic> m) => Transaction(
@@ -123,6 +145,9 @@ class Transaction {
         note: m['note'] as String?,
         date: DateTime.fromMillisecondsSinceEpoch(m['date'] as int),
         items: _decodeItems(m['items']),
+        isRecurring: (m['is_recurring'] as int? ?? 0) == 1,
+        isEssential: (m['is_essential'] as int? ?? 0) == 1,
+        recurrenceMonths: m['recurrence_months'] as int? ?? 0,
       );
 
   static List<TxItem> _decodeItems(Object? raw) {

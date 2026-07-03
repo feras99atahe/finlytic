@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../main.dart' show firebaseAvailable;
+import '../services/app_lock_service.dart';
 import '../services/auth_service.dart';
 import '../services/backup_service.dart';
 import '../services/finance_service.dart' show FinanceService, IncomeSource;
@@ -327,6 +328,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _toggleAppLock(bool turnOn) async {
+    final lock = context.read<AppLockService>();
+    if (!turnOn) {
+      await lock.disable();
+      if (mounted) _snack('App lock disabled.', color: AppTheme.midGray);
+      return;
+    }
+
+    // Turning on: ask the user to set a PIN (min 4 digits).
+    final pinCtrl = TextEditingController();
+    final confirmCtrl = TextEditingController();
+    final pin = await showDialog<String>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          return AlertDialog(
+            title: Text('Set a PIN',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w700)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: pinCtrl,
+                  autofocus: true,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 12,
+                  decoration: const InputDecoration(
+                      labelText: 'PIN (min 4 digits)', counterText: ''),
+                ),
+                TextField(
+                  controller: confirmCtrl,
+                  obscureText: true,
+                  keyboardType: TextInputType.number,
+                  maxLength: 12,
+                  decoration: const InputDecoration(
+                      labelText: 'Confirm PIN', counterText: ''),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final a = pinCtrl.text.trim();
+                  final b = confirmCtrl.text.trim();
+                  if (a.length < 4) {
+                    _snack('PIN must be at least 4 digits.',
+                        color: AppTheme.orange);
+                    return;
+                  }
+                  if (a != b) {
+                    _snack('PINs do not match.', color: AppTheme.orange);
+                    return;
+                  }
+                  Navigator.pop(ctx, a);
+                },
+                child: const Text('Enable'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    pinCtrl.dispose();
+    confirmCtrl.dispose();
+
+    if (pin != null && mounted) {
+      await lock.enable(pin);
+      if (mounted) _snack('App lock enabled.', color: AppTheme.green);
+    }
+  }
+
   void _snack(String msg, {required Color color}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg,
@@ -589,6 +666,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // App lock toggle
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.lightGray),
+              ),
+              child: SwitchListTile.adaptive(
+                value: context.watch<AppLockService>().enabled,
+                activeThumbColor: AppTheme.orange,
+                onChanged: _toggleAppLock,
+                secondary:
+                    const Icon(Icons.lock_outline_rounded, color: AppTheme.midGray),
+                title: Text('App Lock',
+                    style: GoogleFonts.lora(
+                        fontSize: 14, color: AppTheme.dark)),
+                subtitle: Text(
+                  'Require a PIN or biometrics to open the app.',
+                  style:
+                      GoogleFonts.lora(fontSize: 12, color: AppTheme.midGray),
+                ),
               ),
             ),
             const SizedBox(height: 16),

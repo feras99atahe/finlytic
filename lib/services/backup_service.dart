@@ -15,7 +15,13 @@ import '../models/transaction.dart' as txm;
 class BackupService {
   final _db = FirebaseFirestore.instance;
 
-  String get _uid => FirebaseAuth.instance.currentUser!.uid;
+  String get _uid {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      throw 'You must be signed in to back up or restore.';
+    }
+    return uid;
+  }
 
   CollectionReference<Map<String, dynamic>> get _accounts =>
       _db.collection('users').doc(_uid).collection('accounts');
@@ -57,20 +63,31 @@ class BackupService {
     final remoteGoals        = results[2].docs.map((d) => Goal.fromMap(d.data())).toList();
     final remoteDebts        = results[3].docs.map((d) => Debt.fromMap(d.data())).toList();
 
-    if (remoteAccounts.isEmpty) throw 'No backup found for this account.';
+    // Treat the backup as missing only if *every* collection is empty, so a
+    // user who happens to have no accounts (but has other data) isn't blocked.
+    if (remoteAccounts.isEmpty &&
+        remoteTransactions.isEmpty &&
+        remoteGoals.isEmpty &&
+        remoteDebts.isEmpty) {
+      throw 'No backup found for this account.';
+    }
 
+    // Wrap the wipe + re-insert in a single transaction so a failure midway
+    // rolls back and the existing local data is preserved (no data loss).
     final local = await DBHelper.instance.database;
-    await local.delete('accounts');
-    await local.delete('transactions');
-    await local.delete('goals');
-    await local.delete('debts');
+    await local.transaction((txn) async {
+      await txn.delete('accounts');
+      await txn.delete('transactions');
+      await txn.delete('goals');
+      await txn.delete('debts');
 
-    final localBatch = local.batch();
-    for (final a in remoteAccounts)     localBatch.insert('accounts', a.toMap());
-    for (final t in remoteTransactions) localBatch.insert('transactions', t.toMap());
-    for (final g in remoteGoals)        localBatch.insert('goals', g.toMap());
-    for (final d in remoteDebts)        localBatch.insert('debts', d.toMap());
-    await localBatch.commit();
+      final batch = txn.batch();
+      for (final a in remoteAccounts)     batch.insert('accounts', a.toMap());
+      for (final t in remoteTransactions) batch.insert('transactions', t.toMap());
+      for (final g in remoteGoals)        batch.insert('goals', g.toMap());
+      for (final d in remoteDebts)        batch.insert('debts', d.toMap());
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<DateTime?> lastBackupTime() async {

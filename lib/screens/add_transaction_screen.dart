@@ -7,6 +7,7 @@ import '../models/account.dart';
 import '../models/transaction.dart' as txm;
 import '../services/finance_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 import '../widgets/item_editor.dart';
 
 class AddTransactionScreen extends StatefulWidget {
@@ -195,17 +196,16 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   String? _contact;
   DateTime _date = DateTime.now();
   List<txm.TxItem> _items = const [];
-
-  static const _categories = [
-    'Food', 'Services', 'Restaurants', 'Personal',
-    'Transport', 'Shopping', 'Health', 'Entertain.', 'Other',
-  ];
+  bool _isRecurring = false;
+  bool _isEssential = false;
+  int _recurrenceMonths = 0;
 
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
     final eligible = svc.accounts.toList();
     _fromId ??= eligible.isNotEmpty ? eligible.first.id : null;
+    final categories = svc.categories;
 
     return _FormFrame(
       children: [
@@ -222,33 +222,38 @@ class _ExpenseFormState extends State<_ExpenseForm> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _categories.map((c) {
-            final selected = _category == c;
-            final color = AppTheme.categoryColors[c] ?? AppTheme.midGray;
-            return GestureDetector(
-              onTap: () => setState(() => _category = c),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: selected ? color : Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: selected ? color : AppTheme.lightGray,
+          children: [
+            ...categories.map((c) {
+              final selected = _category == c;
+              final color = AppTheme.colorForCategory(c);
+              return GestureDetector(
+                onTap: () => setState(() => _category = c),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: selected ? color : Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: selected ? color : AppTheme.lightGray,
+                    ),
+                  ),
+                  child: Text(
+                    c,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? AppTheme.light : AppTheme.dark,
+                    ),
                   ),
                 ),
-                child: Text(
-                  c,
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: selected ? AppTheme.light : AppTheme.dark,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
+              );
+            }),
+            AddCategoryChip(
+              onAdded: (name) => setState(() => _category = name),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
         _DateField(
@@ -268,6 +273,16 @@ class _ExpenseFormState extends State<_ExpenseForm> {
           controller: _note,
           decoration: const InputDecoration(labelText: 'Note (optional)'),
         ),
+        const SizedBox(height: 20),
+        ExpenseAxisFields(
+          isRecurring: _isRecurring,
+          isEssential: _isEssential,
+          recurrenceMonths: _recurrenceMonths,
+          onRecurringChanged: (v) => setState(() => _isRecurring = v),
+          onEssentialChanged: (v) => setState(() => _isEssential = v),
+          onRecurrenceMonthsChanged: (v) =>
+              setState(() => _recurrenceMonths = v),
+        ),
         const SizedBox(height: 28),
         _SubmitButton(label: 'Record expense', onTap: _submit),
       ],
@@ -286,6 +301,9 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             note: _note.text,
             date: _date,
             items: _items,
+            isRecurring: _isRecurring,
+            isEssential: _isEssential,
+            recurrenceMonths: _recurrenceMonths,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

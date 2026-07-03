@@ -41,6 +41,20 @@ class AppTheme {
     'Other'       : midGray,
   };
 
+  /// Palette used to give user-added categories (no fixed color above) a
+  /// stable, distinct color instead of all collapsing to grey.
+  static const List<Color> _categoryPalette = [
+    orange, blue, green,
+    Color(0xFFC18558), Color(0xFFA84B33), Color(0xFF4F7AA8),
+    Color(0xFFD9A557), Color(0xFF6B8E5A), Color(0xFF8B6BA8),
+  ];
+
+  /// Color for a category name: the fixed mapping when present, otherwise a
+  /// deterministic palette color derived from the name.
+  static Color colorForCategory(String name) =>
+      categoryColors[name] ??
+      _categoryPalette[name.hashCode.abs() % _categoryPalette.length];
+
   static ThemeData get lightTheme {
     final base = ThemeData.light();
     return base.copyWith(

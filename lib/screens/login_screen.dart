@@ -34,12 +34,25 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() { _loading = true; _error = null; });
 
     final auth = context.read<AuthService>();
+    final wasRegister = !_isLogin;
     final err = _isLogin
         ? await auth.login(_emailCtrl.text, _passCtrl.text)
         : await auth.register(_emailCtrl.text, _passCtrl.text);
 
     if (mounted) {
       setState(() { _loading = false; _error = err; });
+      if (err == null && wasRegister) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Account created. Check your inbox to verify your email.',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+            ),
+            backgroundColor: AppTheme.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -150,8 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   validator: (v) {
                     if (v == null || v.isEmpty) return 'Enter your password.';
-                    if (!_isLogin && v.length < 6) {
-                      return 'Password must be at least 6 characters.';
+                    if (!_isLogin && v.length < 8) {
+                      return 'Password must be at least 8 characters.';
                     }
                     return null;
                   },

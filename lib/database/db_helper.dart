@@ -12,7 +12,7 @@ class DBHelper {
   static Database? _db;
 
   static const _kDbName = 'finlytic.db';
-  static const _kDbVersion = 6;
+  static const _kDbVersion = 7;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -68,7 +68,10 @@ class DBHelper {
         contact         TEXT,
         note            TEXT,
         date            INTEGER NOT NULL,
-        items           TEXT
+        items           TEXT,
+        is_recurring        INTEGER NOT NULL DEFAULT 0,
+        is_essential        INTEGER NOT NULL DEFAULT 0,
+        recurrence_months   INTEGER NOT NULL DEFAULT 0
       )
     ''');
 
@@ -111,6 +114,16 @@ class DBHelper {
     }
     if (oldVersion < 6) {
       await _createEditLogsTable(db);
+    }
+    if (oldVersion < 7) {
+      // Two-axis expense classification (change spec §1). Legacy rows default to
+      // is_recurring=0 (variable) & is_essential=0 (secondary) — safe, no loss.
+      await db.execute(
+          'ALTER TABLE transactions ADD COLUMN is_recurring INTEGER NOT NULL DEFAULT 0');
+      await db.execute(
+          'ALTER TABLE transactions ADD COLUMN is_essential INTEGER NOT NULL DEFAULT 0');
+      await db.execute(
+          'ALTER TABLE transactions ADD COLUMN recurrence_months INTEGER NOT NULL DEFAULT 0');
     }
   }
 

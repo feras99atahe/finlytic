@@ -23,6 +23,7 @@ class _ImportScreenState extends State<ImportScreen> {
   bool _picking = false;
   bool _importing = false;
   bool _sharingTemplate = false;
+  bool _exporting = false;
   String? _fileName;
 
   List<CsvRow> get _validRows =>
@@ -53,6 +54,25 @@ class _ImportScreenState extends State<ImportScreen> {
       _snack('Could not read file: $e', error: true);
     } finally {
       if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _exportCsv() async {
+    final svc = context.read<FinanceService>();
+    if (svc.transactions.isEmpty) {
+      _snack('No transactions to export.', error: true);
+      return;
+    }
+    setState(() => _exporting = true);
+    try {
+      await CsvService.exportTransactions(
+        transactions: svc.transactions.toList(),
+        accounts: svc.accounts.toList(),
+      );
+    } catch (e) {
+      if (mounted) _snack('Could not export: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
@@ -218,6 +238,17 @@ class _ImportScreenState extends State<ImportScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => Navigator.pop(context),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Export all transactions to CSV',
+            icon: _exporting
+                ? const SizedBox(
+                    width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.ios_share_rounded),
+            onPressed: _exporting ? null : _exportCsv,
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),

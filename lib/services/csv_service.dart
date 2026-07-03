@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:csv/csv.dart';
@@ -7,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/account.dart';
 import '../models/debt.dart';
+import '../models/transaction.dart' as txm;
 
 // ── Column indices ────────────────────────────────────────────────────────────
 // type | amount | date | account | category | note | contact | direction | due_date
@@ -112,6 +114,55 @@ class CsvService {
     await Share.shareXFiles(
       [XFile(file.path, mimeType: 'text/csv')],
       subject: 'Finlytic CSV Import Template',
+    );
+  }
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+  /// Exports all transactions to CSV and opens the share sheet. Columns follow
+  /// the change-spec §6 fixed order and include the two-axis fields. Written as
+  /// UTF-8 **with BOM** so Arabic renders correctly in Excel.
+  static const List<String> exportColumns = [
+    'date', 'type', 'category', 'name', 'amount', 'currency', 'account',
+    'is_recurring', 'is_essential', 'recurrence_months', 'contact', 'items',
+  ];
+
+  static Future<void> exportTransactions({
+    required List<txm.Transaction> transactions,
+    required List<Account> accounts,
+  }) async {
+    final accById = {for (final a in accounts) a.id: a};
+
+    final rows = <List<dynamic>>[exportColumns];
+    for (final t in transactions) {
+      // The account whose currency/name best represents this row.
+      final acc = accById[t.fromAccountId ?? t.toAccountId];
+      rows.add([
+        t.date.toIso8601String(),
+        t.type.name,
+        t.category ?? '',
+        '', // name/vendor — not captured yet (add-flow redesign, spec §3)
+        t.amount,
+        acc?.currency ?? '',
+        acc?.name ?? '',
+        t.isRecurring ? 1 : 0,
+        t.isEssential ? 1 : 0,
+        t.recurrenceMonths,
+        t.contact ?? '',
+        t.items.isEmpty
+            ? ''
+            : jsonEncode(t.items.map((e) => e.toMap()).toList()),
+      ]);
+    }
+
+    final csv = const ListToCsvConverter().convert(rows);
+    final dir = await getTemporaryDirectory();
+    final stamp = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
+    final file = File('${dir.path}/finlytic_export_$stamp.csv');
+    // Prefix with the UTF-8 BOM (writeAsString encodes UTF-8 by default).
+    await file.writeAsString('\u{FEFF}$csv');
+    await Share.shareXFiles(
+      [XFile(file.path, mimeType: 'text/csv')],
+      subject: 'Finlytic export',
     );
   }
 

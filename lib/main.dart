@@ -6,8 +6,10 @@ import 'package:provider/provider.dart';
 
 import 'firebase_options.dart';
 import 'quick_add_popup.dart';
+import 'screens/lock_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_shell.dart';
+import 'services/app_lock_service.dart';
 import 'services/auth_service.dart';
 import 'services/finance_service.dart';
 import 'services/notification_service.dart';
@@ -61,6 +63,7 @@ class _FinlyticAppState extends State<FinlyticApp>
     with WidgetsBindingObserver {
   // Held so we can reload after the quick-add widget popup writes new data.
   final FinanceService _finance = FinanceService()..load();
+  final AppLockService _appLock = AppLockService()..init();
 
   @override
   void initState() {
@@ -81,6 +84,10 @@ class _FinlyticAppState extends State<FinlyticApp>
     if (state == AppLifecycleState.resumed) {
       _finance.load();
       WidgetService.updateBalance(_finance.totalBalance);
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      // Re-lock as soon as the app leaves the foreground.
+      _appLock.lockIfEnabled();
     }
   }
 
@@ -90,11 +97,27 @@ class _FinlyticAppState extends State<FinlyticApp>
       providers: [
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider.value(value: _finance),
+        ChangeNotifierProvider.value(value: _appLock),
       ],
       child: MaterialApp(
         title: 'Finlytic',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
+        builder: (context, child) {
+          // Overlay the lock screen above every route when locked. We listen to
+          // the service via AnimatedBuilder (not context.watch) because
+          // depending on an InheritedWidget inside MaterialApp.builder throws a
+          // framework assertion when a route is torn down during a notify.
+          return AnimatedBuilder(
+            animation: _appLock,
+            builder: (context, _) => Stack(
+              children: [
+                if (child != null) child,
+                if (_appLock.locked) const LockScreen(),
+              ],
+            ),
+          );
+        },
         home: firebaseAvailable ? const _AuthGate() : const MainShell(),
       ),
     );

@@ -8,6 +8,7 @@ import '../models/transaction.dart' as txm;
 import '../models/tx_edit_log.dart';
 import '../services/finance_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/common.dart';
 import '../widgets/item_editor.dart';
 
 /// Edit an existing transaction. The transaction *type* can be changed via the
@@ -34,11 +35,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   late DateTime _date;
   late List<txm.TxItem> _items;
   late bool _debtFromAccount; // debt only: was it paid from an account?
-
-  static const _categories = [
-    'Food', 'Services', 'Restaurants', 'Personal',
-    'Transport', 'Shopping', 'Health', 'Entertain.', 'Other',
-  ];
+  late bool _isRecurring;
+  late bool _isEssential;
+  late int _recurrenceMonths;
 
   static const _selectableTypes = [
     txm.TxType.income,
@@ -64,6 +63,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     _date = _tx.date;
     _items = List.of(_tx.items);
     _debtFromAccount = _tx.fromAccountId != null;
+    _isRecurring = _tx.isRecurring;
+    _isEssential = _tx.isEssential;
+    _recurrenceMonths = _tx.recurrenceMonths;
   }
 
   /// Switch the transaction to a new [type], back-filling sensible account
@@ -81,7 +83,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           break;
         case txm.TxType.expense:
           _fromId ??= _toId ?? firstAcc;
-          _category ??= _categories.first;
+          _category ??= context.read<FinanceService>().categories.first;
           break;
         case txm.TxType.debt:
           _fromId ??= _toId ?? firstAcc;
@@ -198,6 +200,16 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           ),
           const SizedBox(height: 16),
           _noteField(),
+          const SizedBox(height: 20),
+          ExpenseAxisFields(
+            isRecurring: _isRecurring,
+            isEssential: _isEssential,
+            recurrenceMonths: _recurrenceMonths,
+            onRecurringChanged: (v) => setState(() => _isRecurring = v),
+            onEssentialChanged: (v) => setState(() => _isEssential = v),
+            onRecurrenceMonthsChanged: (v) =>
+                setState(() => _recurrenceMonths = v),
+          ),
         ];
 
       case txm.TxType.transfer:
@@ -287,6 +299,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             note: noteText.isEmpty ? null : noteText,
             clearNote: noteText.isEmpty,
             items: _items,
+            isRecurring: false,
+            isEssential: false,
+            recurrenceMonths: 0,
           );
           break;
 
@@ -303,6 +318,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             clearNote: true,
             items: const [],
             date: _date,
+            isRecurring: false,
+            isEssential: false,
+            recurrenceMonths: 0,
           );
           break;
 
@@ -314,13 +332,16 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             amount: amt,
             fromAccountId: _fromId,
             clearToAccount: true,
-            category: _category ?? _categories.first,
+            category: _category ?? svc.categories.first,
             date: _date,
             contact: _contact,
             clearContact: _contact == null,
             note: noteText.isEmpty ? null : noteText,
             clearNote: noteText.isEmpty,
             items: _items,
+            isRecurring: _isRecurring,
+            isEssential: _isEssential,
+            recurrenceMonths: _recurrenceMonths,
           );
           break;
 
@@ -343,6 +364,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             date: _date,
             note: noteText.isEmpty ? null : noteText,
             clearNote: noteText.isEmpty,
+            isRecurring: false,
+            isEssential: false,
+            recurrenceMonths: 0,
           );
           break;
 
@@ -366,6 +390,9 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             date: _date,
             note: noteText.isEmpty ? null : noteText,
             clearNote: noteText.isEmpty,
+            isRecurring: false,
+            isEssential: false,
+            recurrenceMonths: 0,
           );
           break;
       }
@@ -502,32 +529,39 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   }
 
   Widget _categoryPicker() {
+    final categories = context.watch<FinanceService>().categories;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _categories.map((c) {
-        final selected = _category == c;
-        final color = AppTheme.categoryColors[c] ?? AppTheme.midGray;
-        return GestureDetector(
-          onTap: () => setState(() => _category = c),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? color : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: selected ? color : AppTheme.lightGray),
+      children: [
+        ...categories.map((c) {
+          final selected = _category == c;
+          final color = AppTheme.colorForCategory(c);
+          return GestureDetector(
+            onTap: () => setState(() => _category = c),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: selected ? color : Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border:
+                    Border.all(color: selected ? color : AppTheme.lightGray),
+              ),
+              child: Text(c,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? AppTheme.light : AppTheme.dark,
+                  )),
             ),
-            child: Text(c,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: selected ? AppTheme.light : AppTheme.dark,
-                )),
-          ),
-        );
-      }).toList(),
+          );
+        }),
+        AddCategoryChip(
+          onAdded: (name) => setState(() => _category = name),
+        ),
+      ],
     );
   }
 

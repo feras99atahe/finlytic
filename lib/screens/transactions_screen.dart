@@ -24,14 +24,10 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   String? _category;
   DateTimeRange? _range;
 
-  static const _categories = [
-    'Food', 'Services', 'Restaurants', 'Personal', 'Debt',
-    'Transport', 'Shopping', 'Health', 'Entertain.', 'Other',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
+    final categories = svc.categories;
     final list = svc.filtered(
       from: _range?.start,
       to: _range?.end,
@@ -181,11 +177,11 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
                         onTap: () => setState(() => _category = null),
                       ),
                       const SizedBox(width: 8),
-                      ..._categories.expand((c) => [
+                      ...categories.expand((c) => [
                             _Pill(
                               label: c,
                               selected: _category == c,
-                              dot: AppTheme.categoryColors[c],
+                              dot: AppTheme.colorForCategory(c),
                               onTap: () => setState(() => _category = c),
                             ),
                             const SizedBox(width: 8),

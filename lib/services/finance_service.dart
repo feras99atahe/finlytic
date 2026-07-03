@@ -30,9 +30,16 @@ class IncomeSource {
 class FinanceService extends ChangeNotifier {
   final _uuid = const Uuid();
 
+  /// Categories every account starts with. Users can add their own on top.
+  static const List<String> defaultCategories = [
+    'Food', 'Services', 'Restaurants', 'Personal',
+    'Transport', 'Shopping', 'Health', 'Entertain.', 'Other',
+  ];
+
   List<Account> _accounts = [];
   List<txm.Transaction> _transactions = [];
   List<IncomeSource> _incomeSources = [];
+  List<String> _categories = List.of(defaultCategories);
   double _riskFundAllocationPct = 0.10;
   double _riskFundSavedAmount = 0.0;
   List<Goal> _goals = [];
@@ -45,6 +52,7 @@ class FinanceService extends ChangeNotifier {
   List<Debt> get debts => List.unmodifiable(_debts);
   List<Contact> get contacts => List.unmodifiable(_contacts);
   List<IncomeSource> get incomeSources => List.unmodifiable(_incomeSources);
+  List<String> get categories => List.unmodifiable(_categories);
 
   /// Total monthly income from all sources.
   double get monthlySalary =>
@@ -107,6 +115,12 @@ class FinanceService extends ChangeNotifier {
     _riskFundAllocationPct = prefs.getDouble('risk_fund_allocation_pct') ?? 0.10;
     _riskFundSavedAmount = prefs.getDouble('risk_fund_saved_amount') ?? 0.0;
 
+    final catsJson = prefs.getString('expense_categories');
+    if (catsJson != null) {
+      final list = (jsonDecode(catsJson) as List).cast<String>();
+      if (list.isNotEmpty) _categories = list;
+    }
+
     if (_accounts.isEmpty) {
       await _seedDefaultAccounts();
     }
@@ -135,6 +149,29 @@ class FinanceService extends ChangeNotifier {
     _goals[idx] = updated;
     await db.update('goals', updated.toMap(),
         where: 'id = ?', whereArgs: [goalId]);
+    notifyListeners();
+  }
+
+  /// Adds a user-defined expense category (case-insensitive de-dupe) and
+  /// persists it. No-op for blank or already-existing names.
+  Future<void> addCategory(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    if (_categories.any((c) => c.toLowerCase() == trimmed.toLowerCase())) {
+      return;
+    }
+    _categories.add(trimmed);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('expense_categories', jsonEncode(_categories));
+    notifyListeners();
+  }
+
+  /// Removes a category. Default categories cannot be removed.
+  Future<void> removeCategory(String name) async {
+    if (defaultCategories.contains(name)) return;
+    _categories.remove(name);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('expense_categories', jsonEncode(_categories));
     notifyListeners();
   }
 
@@ -328,6 +365,9 @@ class FinanceService extends ChangeNotifier {
     String? contact,
     DateTime? date,
     List<txm.TxItem> items = const [],
+    bool isRecurring = false,
+    bool isEssential = false,
+    int recurrenceMonths = 0,
   }) async {
     final acc = accountById(fromAccountId);
     if (acc == null) throw 'Account not found';
@@ -345,6 +385,9 @@ class FinanceService extends ChangeNotifier {
       note: note,
       date: date ?? DateTime.now(),
       items: items,
+      isRecurring: isRecurring,
+      isEssential: isEssential,
+      recurrenceMonths: recurrenceMonths,
     ));
     await _updateBalance(fromAccountId, -amount);
     notifyListeners();
@@ -515,6 +558,9 @@ class FinanceService extends ChangeNotifier {
     String? note,
     DateTime? date,
     List<txm.TxItem>? items,
+    bool? isRecurring,
+    bool? isEssential,
+    int? recurrenceMonths,
     bool clearFromAccount = false,
     bool clearToAccount = false,
     bool clearCategory = false,
@@ -534,6 +580,9 @@ class FinanceService extends ChangeNotifier {
       note: note,
       date: date,
       items: items,
+      isRecurring: isRecurring,
+      isEssential: isEssential,
+      recurrenceMonths: recurrenceMonths,
       clearFromAccount: clearFromAccount,
       clearToAccount: clearToAccount,
       clearCategory: clearCategory,
@@ -881,15 +930,37 @@ class FinanceService extends ChangeNotifier {
     return byMonth.values.fold(0.0, (s, v) => s + v) / byMonth.length;
   }
 
+  /// Average monthly *recurring* (fixed) expenses from completed months only.
+  ///
+  /// Per change spec §2, only `is_recurring = 1` expenses feed the projected
+  /// savings-capacity — variable one-offs (emergency repairs, a restaurant
+  /// dinner) lower the actual balance but must NOT enter the monthly rate.
+  double avgMonthlyRecurringExpenses() {
+    if (_transactions.isEmpty) return 0;
+    final cur = _currentMonthKey;
+    final byMonth = <String, double>{};
+    for (final t in _transactions) {
+      if (t.type != txm.TxType.expense) continue;
+      if (!t.isRecurring) continue;
+      final key = '${t.date.year}-${t.date.month}';
+      if (key == cur) continue; // skip current incomplete month
+      byMonth[key] = (byMonth[key] ?? 0) + t.amount;
+    }
+    if (byMonth.isEmpty) return 0;
+    return byMonth.values.fold(0.0, (s, v) => s + v) / byMonth.length;
+  }
+
   /// Best estimate of monthly savings capacity.
-  /// - With salary: salary − avg completed-month expenses (forward-looking, stable).
+  /// - With salary: salary − avg completed-month *recurring* expenses
+  ///   (forward-looking, stable; variable one-offs excluded per spec §2).
   /// - Without salary: avg completed-month (income − expenses), opening balance excluded.
   /// Returns 0 when there is not yet enough data (no completed month and no salary).
   double effectiveMonthlySavings() {
     final total = monthlySalary;
     if (total > 0) {
-      // Salary path: always usable. If no expense history yet, expenses = 0 (optimistic).
-      return total - avgMonthlyExpenses();
+      // Salary path: always usable. Only fixed/recurring expenses are deducted;
+      // if none logged yet, recurring = 0 (optimistic).
+      return total - avgMonthlyRecurringExpenses();
     }
     // Transaction-history path: only meaningful after ≥1 completed month.
     if (!hasEnoughData) return 0;
