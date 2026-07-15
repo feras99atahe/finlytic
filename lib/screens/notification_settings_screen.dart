@@ -74,6 +74,15 @@ class _NotificationSettingsScreenState
     _toast('Reminder ${index + 1} set for ${picked.format(context)}');
   }
 
+  Future<void> _sendTest() async {
+    try {
+      await _notif.showTest();
+      if (mounted) _toast('Test notification sent — check your shade.');
+    } catch (e) {
+      if (mounted) _toast(e.toString());
+    }
+  }
+
   void _toast(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -122,6 +131,21 @@ class _NotificationSettingsScreenState
                           fontSize: 13, color: AppTheme.midGray),
                     ),
                     onChanged: _toggle,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _sendTest,
+                    icon: const Icon(Icons.notifications_active_outlined,
+                        size: 18),
+                    label: const Text('Send a test notification'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppTheme.dark,
+                      side: const BorderSide(color: AppTheme.lightGray),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),

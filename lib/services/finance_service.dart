@@ -27,6 +27,20 @@ class IncomeSource {
       );
 }
 
+/// A named percentage slice of the user's monthly income (e.g. "Savings 20%").
+class BudgetSplit {
+  final String name;
+  final double pct; // 0..100
+  BudgetSplit({required this.name, required this.pct});
+
+  Map<String, dynamic> toMap() => {'name': name, 'pct': pct};
+
+  factory BudgetSplit.fromMap(Map<String, dynamic> m) => BudgetSplit(
+        name: (m['name'] ?? '') as String,
+        pct: (m['pct'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 class FinanceService extends ChangeNotifier {
   final _uuid = const Uuid();
 
@@ -40,6 +54,8 @@ class FinanceService extends ChangeNotifier {
   List<txm.Transaction> _transactions = [];
   List<IncomeSource> _incomeSources = [];
   List<String> _categories = List.of(defaultCategories);
+  double _monthlyBalance = 0; // user-entered headline number for Home
+  List<BudgetSplit> _budgetSplits = [];
   double _riskFundAllocationPct = 0.10;
   double _riskFundSavedAmount = 0.0;
   List<Goal> _goals = [];
@@ -53,6 +69,12 @@ class FinanceService extends ChangeNotifier {
   List<Contact> get contacts => List.unmodifiable(_contacts);
   List<IncomeSource> get incomeSources => List.unmodifiable(_incomeSources);
   List<String> get categories => List.unmodifiable(_categories);
+
+  /// User-entered monthly balance shown as the single Home headline number.
+  double get monthlyBalance => _monthlyBalance;
+
+  /// User-defined percentage split of the monthly income.
+  List<BudgetSplit> get budgetSplits => List.unmodifiable(_budgetSplits);
 
   /// Total monthly income from all sources.
   double get monthlySalary =>
@@ -121,6 +143,15 @@ class FinanceService extends ChangeNotifier {
       if (list.isNotEmpty) _categories = list;
     }
 
+    _monthlyBalance = prefs.getDouble('monthly_balance') ?? 0;
+    final splitsJson = prefs.getString('budget_splits');
+    if (splitsJson != null) {
+      _budgetSplits = (jsonDecode(splitsJson) as List)
+          .cast<Map<String, dynamic>>()
+          .map(BudgetSplit.fromMap)
+          .toList();
+    }
+
     if (_accounts.isEmpty) {
       await _seedDefaultAccounts();
     }
@@ -180,6 +211,21 @@ class FinanceService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('profile_income_sources',
         jsonEncode(_incomeSources.map((s) => s.toMap()).toList()));
+    notifyListeners();
+  }
+
+  Future<void> setMonthlyBalance(double value) async {
+    _monthlyBalance = value < 0 ? 0 : value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('monthly_balance', _monthlyBalance);
+    notifyListeners();
+  }
+
+  Future<void> setBudgetSplits(List<BudgetSplit> splits) async {
+    _budgetSplits = List.of(splits);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('budget_splits',
+        jsonEncode(_budgetSplits.map((s) => s.toMap()).toList()));
     notifyListeners();
   }
 

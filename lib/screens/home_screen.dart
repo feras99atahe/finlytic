@@ -20,11 +20,6 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final svc = context.watch<FinanceService>();
     final now = DateTime.now();
-    final income  = svc.incomeForMonth(now);
-    final expense = svc.expensesForMonth(now);
-    final savings = svc.savingsForMonth(now);
-    final delta   = svc.spendingDeltaPct(now);
-
     final recent = svc.transactions.take(5).toList();
 
     return RefreshIndicator(
@@ -95,9 +90,10 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // Net worth strip
+                  // Monthly balance — the single headline number.
                   Container(
-                    padding: const EdgeInsets.all(20),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: AppTheme.dark,
                       borderRadius: BorderRadius.circular(20),
@@ -105,67 +101,33 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              'NET WORTH',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 1.6,
-                                color: AppTheme.midGray,
-                              ),
-                            ),
-                            const Spacer(),
-                            _DeltaPill(deltaPct: delta),
-                          ],
+                        Text(
+                          'MONTHLY BALANCE',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.6,
+                            color: AppTheme.midGray,
+                          ),
                         ),
                         const SizedBox(height: 14),
                         Text(
-                          Money.format(svc.totalBalance),
+                          Money.format(svc.monthlyBalance),
                           style: GoogleFonts.poppins(
-                            fontSize: 40,
+                            fontSize: 44,
                             fontWeight: FontWeight.w700,
                             color: AppTheme.light,
-                            letterSpacing: -1.2,
+                            letterSpacing: -1.4,
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _DarkMetric(
-                                label: 'INCOME',
-                                value: Money.compact(income),
-                                color: AppTheme.green,
-                              ),
-                            ),
-                            Container(
-                              width: 1, height: 32,
-                              color: AppTheme.midGray.withOpacity(.3),
-                            ),
-                            Expanded(
-                              child: _DarkMetric(
-                                label: 'SPEND',
-                                value: Money.compact(expense),
-                                color: AppTheme.orange,
-                              ),
-                            ),
-                            Container(
-                              width: 1, height: 32,
-                              color: AppTheme.midGray.withOpacity(.3),
-                            ),
-                            Expanded(
-                              child: _DarkMetric(
-                                label: 'SAVED',
-                                value: Money.compact(savings),
-                                color: savings >= 0
-                                    ? AppTheme.green
-                                    : AppTheme.orange,
-                              ),
-                            ),
-                          ],
-                        ),
+                        if (svc.monthlyBalance <= 0) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Set it in Menu → Profile → Monthly balance.',
+                            style: GoogleFonts.lora(
+                                fontSize: 12, color: AppTheme.midGray),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -235,73 +197,6 @@ class HomeScreen extends StatelessWidget {
           const SliverToBoxAdapter(child: SizedBox(height: 80)),
         ],
       ),
-    );
-  }
-}
-
-class _DeltaPill extends StatelessWidget {
-  final double deltaPct;
-  const _DeltaPill({required this.deltaPct});
-
-  @override
-  Widget build(BuildContext context) {
-    final isUp = deltaPct >= 0;
-    final color = isUp ? AppTheme.orange : AppTheme.green;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(.18),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isUp ? Icons.trending_up_rounded : Icons.trending_down_rounded,
-            size: 12,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '${deltaPct.abs().toStringAsFixed(0)}% vs last',
-            style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DarkMetric extends StatelessWidget {
-  final String label, value;
-  final Color color;
-  const _DarkMetric(
-      {required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(label,
-            style: GoogleFonts.poppins(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.3,
-              color: AppTheme.midGray,
-            )),
-        const SizedBox(height: 6),
-        Text(value,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: color,
-              letterSpacing: -0.3,
-            )),
-      ],
     );
   }
 }

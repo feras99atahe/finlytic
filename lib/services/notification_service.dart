@@ -140,32 +140,67 @@ class NotificationService {
     if (!granted) return;
 
     final reminderTimes = await times();
-    const details = NotificationDetails(
-      android: AndroidNotificationDetails(
-        _channelId,
-        _channelName,
-        channelDescription: _channelDesc,
-        importance: Importance.high,
-        priority: Priority.high,
-        icon: 'ic_stat_finlytic',
-        color: Color(0xFFD97757), // terra brand accent
-      ),
-      iOS: DarwinNotificationDetails(),
-    );
-
     for (var i = 0; i < reminderTimes.length; i++) {
-      await _plugin.zonedSchedule(
+      await _scheduleDaily(
         1001 + i,
         '💰 Finlytic reminder',
         _bodies[i % _bodies.length],
         _nextInstanceOf(reminderTimes[i]),
-        details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time, // repeat daily
       );
     }
+  }
+
+  static const NotificationDetails _details = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _channelId,
+      _channelName,
+      channelDescription: _channelDesc,
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: 'ic_stat_finlytic',
+      color: Color(0xFFD97757), // terra brand accent
+    ),
+    iOS: DarwinNotificationDetails(),
+  );
+
+  /// Schedules one daily-repeating reminder. Prefers an exact alarm (reliable
+  /// on modern Android — the app declares USE_EXACT_ALARM); if the OS refuses
+  /// exact alarms it falls back to an inexact one instead of failing silently.
+  Future<void> _scheduleDaily(
+      int id, String title, String body, tz.TZDateTime when) async {
+    Future<void> go(AndroidScheduleMode mode) => _plugin.zonedSchedule(
+          id,
+          title,
+          body,
+          when,
+          _details,
+          androidScheduleMode: mode,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.time, // repeat daily
+        );
+    try {
+      await go(AndroidScheduleMode.exactAllowWhileIdle);
+    } catch (_) {
+      await go(AndroidScheduleMode.inexactAllowWhileIdle);
+    }
+  }
+
+  /// Fires a notification immediately so the user can confirm delivery works.
+  /// Throws a readable message when notifications are blocked at the OS level.
+  Future<void> showTest() async {
+    if (!_supported) throw 'Notifications are only available on a phone.';
+    if (!_initialized) await init();
+    final granted = await requestPermissions();
+    if (!granted) {
+      throw 'Notifications are blocked. Enable them in system settings.';
+    }
+    await _plugin.show(
+      9999,
+      '💰 Finlytic',
+      'Test notification — reminders are working. 🎉',
+      _details,
+    );
   }
 
   /// The next [tz.TZDateTime] at the given wall-clock time (today or tomorrow).

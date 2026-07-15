@@ -40,6 +40,9 @@ dependencies:
   csv: ^6.0.0
   share_plus: ^10.0.0
 
+  # PDF ledger export
+  pdf: ^3.11.1
+
   # UI
   google_fonts: ^6.1.0
   flutter_slidable: ^3.0.1

@@ -8,7 +8,8 @@ import '../main.dart' show firebaseAvailable;
 import '../services/app_lock_service.dart';
 import '../services/auth_service.dart';
 import '../services/backup_service.dart';
-import '../services/finance_service.dart' show FinanceService, IncomeSource;
+import '../services/finance_service.dart'
+    show FinanceService, IncomeSource, BudgetSplit;
 import '../theme/app_theme.dart';
 import '../utils/money.dart';
 
@@ -31,10 +32,24 @@ class _IncomeRow {
   }
 }
 
+class _SplitRow {
+  final TextEditingController name;
+  final TextEditingController pct;
+  _SplitRow({String n = '', String p = ''})
+      : name = TextEditingController(text: n),
+        pct = TextEditingController(text: p);
+  void dispose() {
+    name.dispose();
+    pct.dispose();
+  }
+}
+
 class _ProfileScreenState extends State<ProfileScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _monthlyBalanceCtrl = TextEditingController();
   final List<_IncomeRow> _incomeRows = [];
+  final List<_SplitRow> _splitRows = [];
   String _currency = 'USD';
 
   final _backup = BackupService();
@@ -56,6 +71,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _nameCtrl.text = prefs.getString('profile_name') ?? '';
       _phoneCtrl.text = prefs.getString('profile_phone') ?? '';
       _currency = prefs.getString('profile_currency') ?? 'USD';
+      _monthlyBalanceCtrl.text =
+          svc.monthlyBalance > 0 ? svc.monthlyBalance.toStringAsFixed(0) : '';
       for (final r in _incomeRows) {
         r.dispose();
       }
@@ -69,6 +86,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       } else {
         _incomeRows.add(_IncomeRow());
+      }
+      for (final r in _splitRows) {
+        r.dispose();
+      }
+      _splitRows.clear();
+      for (final s in svc.budgetSplits) {
+        _splitRows.add(_SplitRow(
+          n: s.name,
+          p: s.pct > 0 ? s.pct.toStringAsFixed(0) : '',
+        ));
       }
     });
   }
@@ -95,12 +122,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         })
         .whereType<IncomeSource>()
         .toList();
+    final splits = _splitRows
+        .map((r) {
+          final pct = double.tryParse(r.pct.text.replaceAll(',', '')) ?? 0;
+          final n = r.name.text.trim();
+          if (n.isEmpty && pct <= 0) return null;
+          return BudgetSplit(name: n.isEmpty ? 'Split' : n, pct: pct);
+        })
+        .whereType<BudgetSplit>()
+        .toList();
+    final balance =
+        double.tryParse(_monthlyBalanceCtrl.text.replaceAll(',', '')) ?? 0;
     if (!mounted) return;
-    await context.read<FinanceService>().setIncomeSources(sources);
+    final svc = context.read<FinanceService>();
+    await svc.setIncomeSources(sources);
+    await svc.setMonthlyBalance(balance);
+    await svc.setBudgetSplits(splits);
     if (mounted) {
       _snack('Profile saved.', color: AppTheme.green);
     }
   }
+
+  double get _splitTotalPct => _splitRows.fold(
+      0.0, (s, r) => s + (double.tryParse(r.pct.text.replaceAll(',', '')) ?? 0));
 
   Future<void> _doBackup() async {
     setState(() => _backupLoading = true);
@@ -417,7 +461,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _monthlyBalanceCtrl.dispose();
     for (final r in _incomeRows) {
+      r.dispose();
+    }
+    for (final r in _splitRows) {
       r.dispose();
     }
     super.dispose();
@@ -508,6 +556,154 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            const SizedBox(height: 32),
+
+            // ── Monthly balance (Home headline number) ──
+            _sectionLabel('MONTHLY BALANCE'),
+            const SizedBox(height: 6),
+            Text(
+              'The single number shown on your Home screen.',
+              style: GoogleFonts.lora(
+                  fontSize: 12,
+                  color: AppTheme.midGray,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _monthlyBalanceCtrl,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                prefixText: '\$ ',
+                labelText: 'Monthly balance',
+                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
+              ),
+            ),
+
+            const SizedBox(height: 32),
+
+            // ── Income split (percentage buckets) ──
+            _sectionLabel('INCOME SPLIT'),
+            const SizedBox(height: 6),
+            Text(
+              'Divide your monthly income into percentage buckets.',
+              style: GoogleFonts.lora(
+                  fontSize: 12,
+                  color: AppTheme.midGray,
+                  fontStyle: FontStyle.italic),
+            ),
+            const SizedBox(height: 14),
+            ..._splitRows.asMap().entries.map((e) {
+              final idx = e.key;
+              final row = e.value;
+              final pct = double.tryParse(row.pct.text.replaceAll(',', '')) ?? 0;
+              final balance = double.tryParse(
+                      _monthlyBalanceCtrl.text.replaceAll(',', '')) ??
+                  0;
+              final amount = balance * pct / 100;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      flex: 5,
+                      child: TextField(
+                        controller: row.name,
+                        decoration: const InputDecoration(
+                          labelText: 'Bucket',
+                          hintText: 'e.g. Savings, Rent',
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: row.pct,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        onChanged: (_) => setState(() {}),
+                        decoration: const InputDecoration(
+                          suffixText: '%',
+                          labelText: 'Percent',
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    GestureDetector(
+                      onTap: () => setState(() {
+                        _splitRows[idx].dispose();
+                        _splitRows.removeAt(idx);
+                      }),
+                      child: Container(
+                        width: 32, height: 32,
+                        decoration: BoxDecoration(
+                          color: AppTheme.orangeTint,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: const Icon(Icons.remove_rounded,
+                            size: 16, color: AppTheme.orange),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    SizedBox(
+                      width: 62,
+                      child: Text(
+                        amount > 0 ? Money.compact(amount) : '',
+                        textAlign: TextAlign.right,
+                        style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.midGray),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            Row(
+              children: [
+                const Icon(Icons.percent_rounded,
+                    size: 15, color: AppTheme.midGray),
+                const SizedBox(width: 6),
+                Text('Total allocated: ',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, color: AppTheme.midGray)),
+                Text('${_splitTotalPct.toStringAsFixed(0)}%',
+                    style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _splitTotalPct > 100
+                            ? AppTheme.orange
+                            : AppTheme.dark)),
+                if (_splitTotalPct > 100) ...[
+                  const SizedBox(width: 6),
+                  Text('over 100%',
+                      style: GoogleFonts.lora(
+                          fontSize: 11, color: AppTheme.orange)),
+                ],
+              ],
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => setState(() => _splitRows.add(_SplitRow())),
+              icon: const Icon(Icons.add_rounded, size: 16),
+              label: const Text('Add split'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.dark,
+                side: const BorderSide(color: AppTheme.lightGray),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: GoogleFonts.poppins(
+                    fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
 
             const SizedBox(height: 32),
 

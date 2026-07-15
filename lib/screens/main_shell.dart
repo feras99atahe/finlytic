@@ -11,12 +11,14 @@ import 'add_transaction_screen.dart';
 import 'analytics_screen.dart';
 import 'balance_setup_screen.dart';
 import 'contacts_screen.dart';
+import 'dashboard_screen.dart';
 import 'debts_screen.dart';
 import 'goals_screen.dart';
 import 'home_screen.dart';
 import 'import_screen.dart';
 import 'notification_settings_screen.dart';
 import 'profile_screen.dart';
+import 'reconcile_screen.dart';
 import 'transactions_screen.dart';
 
 class MainShell extends StatefulWidget {
@@ -94,7 +96,13 @@ class _MainShellState extends State<MainShell> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.menu_rounded),
             onSelected: (value) {
-              if (value == 'profile') {
+              if (value == 'dashboard') {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const DashboardScreen()));
+              } else if (value == 'reconcile') {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => const ReconcileScreen()));
+              } else if (value == 'profile') {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (_) => const ProfileScreen()));
               } else if (value == 'balance_setup') {
@@ -115,6 +123,31 @@ class _MainShellState extends State<MainShell> {
               }
             },
             itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'dashboard',
+                child: Row(
+                  children: [
+                    const Icon(Icons.dashboard_outlined, color: AppTheme.dark),
+                    const SizedBox(width: 12),
+                    Text('Dashboard',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'reconcile',
+                child: Row(
+                  children: [
+                    const Icon(Icons.compare_arrows_rounded,
+                        color: AppTheme.dark),
+                    const SizedBox(width: 12),
+                    Text('Reconcile with bank',
+                        style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
               PopupMenuItem(
                 value: 'profile',
                 child: Row(

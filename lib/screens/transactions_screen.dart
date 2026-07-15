@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../models/transaction.dart' as txm;
 import '../services/finance_service.dart';
+import '../services/pdf_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/money.dart';
 import '../widgets/transaction_tile.dart';
@@ -23,6 +24,40 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
   _PaymentFilter _payment = _PaymentFilter.all;
   String? _category;
   DateTimeRange? _range;
+  bool _exporting = false;
+
+  Future<void> _exportPdf(List<txm.Transaction> list) async {
+    if (list.isEmpty) {
+      _snack('Nothing to export in this range.');
+      return;
+    }
+    final svc = context.read<FinanceService>();
+    final dates = list.map((t) => t.date).toList()..sort();
+    final from = _range?.start ?? dates.first;
+    final to = _range?.end ?? dates.last;
+    setState(() => _exporting = true);
+    try {
+      await PdfService.exportLedger(
+        transactions: list,
+        accounts: svc.accounts.toList(),
+        from: from,
+        to: to,
+      );
+    } catch (e) {
+      if (mounted) _snack('Could not export PDF: $e');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg,
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w500)),
+      backgroundColor: AppTheme.dark,
+      behavior: SnackBarBehavior.floating,
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,13 +86,39 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('LEDGER',
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 1.6,
-                      color: AppTheme.orange,
-                    )),
+                Row(
+                  children: [
+                    Text('LEDGER',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.6,
+                          color: AppTheme.orange,
+                        )),
+                    const Spacer(),
+                    _exporting
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2))
+                        : GestureDetector(
+                            onTap: () => _exportPdf(list),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.picture_as_pdf_outlined,
+                                    size: 16, color: AppTheme.orange),
+                                const SizedBox(width: 4),
+                                Text('PDF',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppTheme.orange,
+                                    )),
+                              ],
+                            ),
+                          ),
+                  ],
+                ),
                 const SizedBox(height: 6),
                 RichText(
                   text: TextSpan(
