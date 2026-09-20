@@ -414,6 +414,7 @@ class FinanceService extends ChangeNotifier {
     bool isRecurring = false,
     bool isEssential = false,
     int recurrenceMonths = 0,
+    String? budgetBucket,
   }) async {
     final acc = accountById(fromAccountId);
     if (acc == null) throw 'Account not found';
@@ -434,6 +435,7 @@ class FinanceService extends ChangeNotifier {
       isRecurring: isRecurring,
       isEssential: isEssential,
       recurrenceMonths: recurrenceMonths,
+      budgetBucket: budgetBucket,
     ));
     await _updateBalance(fromAccountId, -amount);
     notifyListeners();
@@ -607,11 +609,13 @@ class FinanceService extends ChangeNotifier {
     bool? isRecurring,
     bool? isEssential,
     int? recurrenceMonths,
+    String? budgetBucket,
     bool clearFromAccount = false,
     bool clearToAccount = false,
     bool clearCategory = false,
     bool clearContact = false,
     bool clearNote = false,
+    bool clearBudgetBucket = false,
   }) async {
     final idx = _transactions.indexWhere((t) => t.id == id);
     if (idx < 0) return;
@@ -629,11 +633,13 @@ class FinanceService extends ChangeNotifier {
       isRecurring: isRecurring,
       isEssential: isEssential,
       recurrenceMonths: recurrenceMonths,
+      budgetBucket: budgetBucket,
       clearFromAccount: clearFromAccount,
       clearToAccount: clearToAccount,
       clearCategory: clearCategory,
       clearContact: clearContact,
       clearNote: clearNote,
+      clearBudgetBucket: clearBudgetBucket,
     );
 
     // Net ledger change = reverse the old version, then apply the new one.
@@ -911,6 +917,19 @@ class FinanceService extends ChangeNotifier {
       if (contact != null && t.contact != contact) continue;
       final c = t.category ?? 'Other';
       map[c] = (map[c] ?? 0) + t.amount;
+    }
+    return map;
+  }
+
+  /// Total expenses this [month] drawn from each budget-split bucket
+  /// (keyed by bucket name). Only expenses with an assigned [budgetBucket].
+  Map<String, double> spentPerBucket(DateTime month) {
+    final map = <String, double>{};
+    for (final t in _transactions) {
+      if (t.type != txm.TxType.expense) continue;
+      if (t.budgetBucket == null) continue;
+      if (t.date.year != month.year || t.date.month != month.month) continue;
+      map[t.budgetBucket!] = (map[t.budgetBucket!] ?? 0) + t.amount;
     }
     return map;
   }

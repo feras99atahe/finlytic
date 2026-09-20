@@ -12,7 +12,7 @@ class DBHelper {
   static Database? _db;
 
   static const _kDbName = 'finlytic.db';
-  static const _kDbVersion = 7;
+  static const _kDbVersion = 8;
 
   Future<Database> get database async {
     if (_db != null) return _db!;
@@ -71,7 +71,8 @@ class DBHelper {
         items           TEXT,
         is_recurring        INTEGER NOT NULL DEFAULT 0,
         is_essential        INTEGER NOT NULL DEFAULT 0,
-        recurrence_months   INTEGER NOT NULL DEFAULT 0
+        recurrence_months   INTEGER NOT NULL DEFAULT 0,
+        budget_bucket       TEXT
       )
     ''');
 
@@ -124,6 +125,11 @@ class DBHelper {
           'ALTER TABLE transactions ADD COLUMN is_essential INTEGER NOT NULL DEFAULT 0');
       await db.execute(
           'ALTER TABLE transactions ADD COLUMN recurrence_months INTEGER NOT NULL DEFAULT 0');
+    }
+    if (oldVersion < 8) {
+      // Envelope budgeting: which income-split bucket an expense draws from.
+      await db.execute(
+          'ALTER TABLE transactions ADD COLUMN budget_bucket TEXT');
     }
   }
 

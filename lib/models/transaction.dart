@@ -55,6 +55,10 @@ class Transaction {
   final bool isEssential;
   final int recurrenceMonths;
 
+  /// Which income-split bucket (from the user's budget splits) this expense is
+  /// drawn from — null when unassigned. Lets Home show each bucket depleting.
+  final String? budgetBucket;
+
   Transaction({
     required this.id,
     required this.type,
@@ -69,6 +73,7 @@ class Transaction {
     this.isRecurring = false,
     this.isEssential = false,
     this.recurrenceMonths = 0,
+    this.budgetBucket,
   });
 
   /// Used to flag the source of cash flow (Cash vs Card) for filtering.
@@ -93,11 +98,13 @@ class Transaction {
     bool? isRecurring,
     bool? isEssential,
     int? recurrenceMonths,
+    String? budgetBucket,
     bool clearFromAccount = false,
     bool clearToAccount = false,
     bool clearCategory = false,
     bool clearContact = false,
     bool clearNote = false,
+    bool clearBudgetBucket = false,
   }) =>
       Transaction(
         id: id,
@@ -114,6 +121,8 @@ class Transaction {
         isRecurring: isRecurring ?? this.isRecurring,
         isEssential: isEssential ?? this.isEssential,
         recurrenceMonths: recurrenceMonths ?? this.recurrenceMonths,
+        budgetBucket:
+            clearBudgetBucket ? null : (budgetBucket ?? this.budgetBucket),
       );
 
   Map<String, dynamic> toMap() => {
@@ -132,6 +141,7 @@ class Transaction {
         'is_recurring': isRecurring ? 1 : 0,
         'is_essential': isEssential ? 1 : 0,
         'recurrence_months': recurrenceMonths,
+        'budget_bucket': budgetBucket,
       };
 
   factory Transaction.fromMap(Map<String, dynamic> m) => Transaction(
@@ -148,6 +158,7 @@ class Transaction {
         isRecurring: (m['is_recurring'] as int? ?? 0) == 1,
         isEssential: (m['is_essential'] as int? ?? 0) == 1,
         recurrenceMonths: m['recurrence_months'] as int? ?? 0,
+        budgetBucket: m['budget_bucket'] as String?,
       );
 
   static List<TxItem> _decodeItems(Object? raw) {

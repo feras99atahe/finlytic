@@ -199,6 +199,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
   bool _isRecurring = false;
   bool _isEssential = false;
   int _recurrenceMonths = 0;
+  String? _bucket;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +207,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
     final eligible = svc.accounts.toList();
     _fromId ??= eligible.isNotEmpty ? eligible.first.id : null;
     final categories = svc.categories;
+    final buckets = svc.budgetSplits;
 
     return _FormFrame(
       children: [
@@ -255,6 +257,21 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             ),
           ],
         ),
+        if (buckets.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          _Label('Comes out of'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _bucketChip('No bucket', _bucket == null,
+                  () => setState(() => _bucket = null)),
+              for (final b in buckets)
+                _bucketChip('${b.name} · ${b.pct.toStringAsFixed(0)}%',
+                    _bucket == b.name, () => setState(() => _bucket = b.name)),
+            ],
+          ),
+        ],
         const SizedBox(height: 20),
         _DateField(
             value: _date, onChanged: (d) => setState(() => _date = d)),
@@ -289,6 +306,27 @@ class _ExpenseFormState extends State<_ExpenseForm> {
     );
   }
 
+  Widget _bucketChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppTheme.dark : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? AppTheme.dark : AppTheme.lightGray),
+        ),
+        child: Text(label,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: selected ? AppTheme.light : AppTheme.dark,
+            )),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     final amt = double.tryParse(_amount.text);
     if (amt == null || amt <= 0 || _fromId == null) return;
@@ -304,6 +342,7 @@ class _ExpenseFormState extends State<_ExpenseForm> {
             isRecurring: _isRecurring,
             isEssential: _isEssential,
             recurrenceMonths: _recurrenceMonths,
+            budgetBucket: _bucket,
           );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {

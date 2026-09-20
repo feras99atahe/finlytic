@@ -38,6 +38,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
   late bool _isRecurring;
   late bool _isEssential;
   late int _recurrenceMonths;
+  String? _bucket;
 
   static const _selectableTypes = [
     txm.TxType.income,
@@ -66,6 +67,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
     _isRecurring = _tx.isRecurring;
     _isEssential = _tx.isEssential;
     _recurrenceMonths = _tx.recurrenceMonths;
+    _bucket = _tx.budgetBucket;
   }
 
   /// Switch the transaction to a new [type], back-filling sensible account
@@ -189,6 +191,11 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           const SizedBox(height: 20),
           const _Label('Category'),
           _categoryPicker(),
+          if (svc.budgetSplits.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            const _Label('Comes out of'),
+            _bucketPicker(svc),
+          ],
           const SizedBox(height: 20),
           _dateField(),
           const SizedBox(height: 16),
@@ -302,6 +309,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             isRecurring: false,
             isEssential: false,
             recurrenceMonths: 0,
+            clearBudgetBucket: true,
           );
           break;
 
@@ -321,6 +329,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             isRecurring: false,
             isEssential: false,
             recurrenceMonths: 0,
+            clearBudgetBucket: true,
           );
           break;
 
@@ -342,6 +351,8 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             isRecurring: _isRecurring,
             isEssential: _isEssential,
             recurrenceMonths: _recurrenceMonths,
+            budgetBucket: _bucket,
+            clearBudgetBucket: _bucket == null,
           );
           break;
 
@@ -367,6 +378,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             isRecurring: false,
             isEssential: false,
             recurrenceMonths: 0,
+            clearBudgetBucket: true,
           );
           break;
 
@@ -393,6 +405,7 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
             isRecurring: false,
             isEssential: false,
             recurrenceMonths: 0,
+            clearBudgetBucket: true,
           );
           break;
       }
@@ -525,6 +538,39 @@ class _EditTransactionScreenState extends State<EditTransactionScreen> {
           ),
         );
       }).toList(),
+    );
+  }
+
+  Widget _bucketPicker(FinanceService svc) {
+    Widget chip(String label, bool selected, VoidCallback onTap) =>
+        GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? AppTheme.dark : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: selected ? AppTheme.dark : AppTheme.lightGray),
+            ),
+            child: Text(label,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppTheme.light : AppTheme.dark,
+                )),
+          ),
+        );
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        chip('No bucket', _bucket == null, () => setState(() => _bucket = null)),
+        for (final b in svc.budgetSplits)
+          chip('${b.name} · ${b.pct.toStringAsFixed(0)}%', _bucket == b.name,
+              () => setState(() => _bucket = b.name)),
+      ],
     );
   }
 
